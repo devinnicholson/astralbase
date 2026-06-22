@@ -52,17 +52,17 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
             if sq.rank() == promo_rank {
                 let direction = if us == Color::White { -8 } else { 8 };
                 // 1. Straight promotion
-                if let Some(src) = sq.offset(direction) {
-                    if board.piece_at(src).is_none() {
+                if let Some(src) = sq.offset(direction)
+                    && board.piece_at(src).is_none() {
                         prev_board.discard_piece_at(sq);
                         prev_board.set_piece_at(src, Piece { role: Role::Pawn, color: us });
 
-                        if is_valid_predecessor(&prev_board, us, them) {
-                            if let Ok(prev_pos) = Chess::from_setup(
+                        if is_valid_predecessor(&prev_board, us, them)
+                            && let Ok(prev_pos) = Chess::from_setup(
                                 Setup {
                                     board: prev_board.clone(),
                                     promoted: pos.promoted().without(sq),
-                                    pockets: pos.pockets().cloned(),
+                                    pockets: pos.pockets().copied(),
                                     turn: us,
                                     castling_rights: pos.castles().castling_rights(),
                                     ep_square: None,
@@ -74,30 +74,28 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                             ) {
                                 parents.push(prev_pos);
                             }
-                        }
                         
                         // Revert
                         prev_board.discard_piece_at(src);
                         prev_board.set_piece_at(sq, Piece { role, color: us });
                     }
-                }
                 
                 // 2. Capture promotion
                 let capture_offsets = if us == Color::White { [-7, -9] } else { [7, 9] };
                 for off in capture_offsets {
-                    if let Some(src) = sq.offset(off) {
-                        if board.piece_at(src).is_none() && src.distance(sq) == 1 {
+                    if let Some(src) = sq.offset(off)
+                        && board.piece_at(src).is_none() && src.distance(sq) == 1 {
                             for captured_role in [Role::Queen, Role::Rook, Role::Bishop, Role::Knight, Role::Pawn] {
                                 prev_board.discard_piece_at(sq);
                                 prev_board.set_piece_at(src, Piece { role: Role::Pawn, color: us });
                                 prev_board.set_piece_at(sq, Piece { role: captured_role, color: them });
                                 
-                                if is_valid_predecessor(&prev_board, us, them) {
-                                    if let Ok(prev_pos_cap) = Chess::from_setup(
+                                if is_valid_predecessor(&prev_board, us, them)
+                                    && let Ok(prev_pos_cap) = Chess::from_setup(
                                         Setup {
                                             board: prev_board.clone(),
                                             promoted: pos.promoted().without(sq),
-                                            pockets: pos.pockets().cloned(),
+                                            pockets: pos.pockets().copied(),
                                             turn: us,
                                             castling_rights: pos.castles().castling_rights(),
                                             ep_square: None,
@@ -109,7 +107,6 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                                     ) {
                                         parents.push(prev_pos_cap);
                                     }
-                                }
                                 
                                 // Revert inside loop is just overwritten, but after loop we must restore
                             }
@@ -117,13 +114,152 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                             prev_board.discard_piece_at(src);
                             prev_board.set_piece_at(sq, Piece { role, color: us });
                         }
-                    }
                 }
             }
         }
 
         // Unmoves for standard pieces (King, Queen, Rook, Bishop, Knight)
-        if role != Role::Pawn {
+        if role == Role::Pawn {
+            // Unmoves for Pawns
+            let direction = if us == Color::White { -8 } else { 8 };
+            
+            // Single push
+            if let Some(src) = sq.offset(direction)
+                && board.piece_at(src).is_none() {
+                    let piece = Piece { role: Role::Pawn, color: us };
+                    prev_board.discard_piece_at(sq);
+                    prev_board.set_piece_at(src, piece);
+                    
+                    if is_valid_predecessor(&prev_board, us, them)
+                        && let Ok(prev_pos) = Chess::from_setup(
+                            Setup {
+                                board: prev_board.clone(),
+                                promoted: pos.promoted(),
+                                pockets: pos.pockets().copied(),
+                                turn: us,
+                                castling_rights: pos.castles().castling_rights(),
+                                ep_square: None,
+                                remaining_checks: pos.remaining_checks().copied(),
+                                halfmoves: pos.halfmoves().saturating_sub(1),
+                                fullmoves: if us == Color::Black { pos.fullmoves() } else { NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1)).unwrap() },
+                            },
+                            CastlingMode::Standard,
+                        ) {
+                            parents.push(prev_pos);
+                        }
+
+                    // Double push
+                    if src.rank() == if us == Color::White { Rank::Third } else { Rank::Sixth }
+                        && let Some(src_dbl) = src.offset(direction)
+                            && board.piece_at(src_dbl).is_none() {
+                                prev_board.discard_piece_at(src);
+                                prev_board.set_piece_at(src_dbl, piece);
+                                
+                                if is_valid_predecessor(&prev_board, us, them)
+                                    && let Ok(prev_pos_dbl) = Chess::from_setup(
+                                        Setup {
+                                            board: prev_board.clone(),
+                                            promoted: pos.promoted(),
+                                            pockets: pos.pockets().copied(),
+                                            turn: us,
+                                            castling_rights: pos.castles().castling_rights(),
+                                            ep_square: Some(src),
+                                            remaining_checks: pos.remaining_checks().copied(),
+                                            halfmoves: pos.halfmoves().saturating_sub(1),
+                                            fullmoves: if us == Color::Black { pos.fullmoves() } else { NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1)).unwrap() },
+                                        },
+                                        CastlingMode::Standard,
+                                    ) {
+                                        parents.push(prev_pos_dbl);
+                                    }
+                                
+                                // Revert double push
+                                prev_board.discard_piece_at(src_dbl);
+                                prev_board.set_piece_at(src, piece);
+                            }
+                    
+                    // Revert single push
+                    prev_board.discard_piece_at(src);
+                    prev_board.set_piece_at(sq, piece);
+                }
+
+            // Pawn Uncaptures
+            let capture_offsets = if us == Color::White { [-7, -9] } else { [7, 9] };
+            for off in capture_offsets {
+                if let Some(src) = sq.offset(off)
+                    && src.distance(sq) == 1 {
+                        if board.piece_at(src).is_none() {
+                            let piece = Piece { role: Role::Pawn, color: us };
+                            prev_board.discard_piece_at(sq);
+                            prev_board.set_piece_at(src, piece);
+                            
+                            for captured_role in [Role::Queen, Role::Rook, Role::Bishop, Role::Knight, Role::Pawn] {
+                                if captured_role == Role::Pawn && (sq.rank() == Rank::First || sq.rank() == Rank::Eighth) {
+                                    continue;
+                                }
+
+                                prev_board.set_piece_at(sq, Piece { role: captured_role, color: them });
+                                
+                                if is_valid_predecessor(&prev_board, us, them)
+                                    && let Ok(prev_pos_cap) = Chess::from_setup(
+                                        Setup {
+                                            board: prev_board.clone(),
+                                            promoted: pos.promoted(),
+                                            pockets: pos.pockets().copied(),
+                                            turn: us,
+                                            castling_rights: pos.castles().castling_rights(),
+                                            ep_square: None,
+                                            remaining_checks: pos.remaining_checks().copied(),
+                                            halfmoves: 0,
+                                            fullmoves: if us == Color::Black { pos.fullmoves() } else { NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1)).unwrap() },
+                                        },
+                                        CastlingMode::Standard,
+                                    ) {
+                                        parents.push(prev_pos_cap);
+                                    }
+                            }
+                            
+                            // Revert uncapture
+                            prev_board.discard_piece_at(src);
+                            prev_board.set_piece_at(sq, piece);
+                        }
+
+                        // En Passant Uncapture
+                        if let Some(captured_sq) = sq.offset(direction)
+                            && board.piece_at(src).is_none() && board.piece_at(captured_sq).is_none() {
+                                let ep_rank = if us == Color::White { Rank::Sixth } else { Rank::Third };
+                                if sq.rank() == ep_rank {
+                                    prev_board.discard_piece_at(sq);
+                                    prev_board.set_piece_at(src, Piece { role: Role::Pawn, color: us });
+                                    prev_board.set_piece_at(captured_sq, Piece { role: Role::Pawn, color: them });
+
+                                    if is_valid_predecessor(&prev_board, us, them)
+                                        && let Ok(prev_pos_ep) = Chess::from_setup(
+                                            Setup {
+                                                board: prev_board.clone(),
+                                                promoted: pos.promoted(),
+                                                pockets: pos.pockets().copied(),
+                                                turn: us,
+                                                castling_rights: pos.castles().castling_rights(),
+                                                ep_square: Some(sq),
+                                                remaining_checks: pos.remaining_checks().copied(),
+                                                halfmoves: 0,
+                                                fullmoves: if us == Color::Black { pos.fullmoves() } else { NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1)).unwrap() },
+                                            },
+                                            CastlingMode::Standard,
+                                        ) {
+                                            parents.push(prev_pos_ep);
+                                        }
+                                    
+                                    // Revert EP
+                                    prev_board.discard_piece_at(src);
+                                    prev_board.discard_piece_at(captured_sq);
+                                    prev_board.set_piece_at(sq, Piece { role: Role::Pawn, color: us });
+                                }
+                            }
+                    }
+            }
+        } else {
             let attacks = shakmaty::attacks::attacks(sq, Piece { role, color: us }, occupied);
 
             for src in attacks {
@@ -139,8 +275,8 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                         if let Ok(prev_pos) = Chess::from_setup(
                             Setup {
                                 board: prev_board.clone(),
-                                promoted: pos.promoted().clone(),
-                                pockets: pos.pockets().cloned(),
+                                promoted: pos.promoted(),
+                                pockets: pos.pockets().copied(),
                                 turn: us,
                                 castling_rights: cr,
                                 ep_square: None,
@@ -167,8 +303,8 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                             if let Ok(prev_pos_cap) = Chess::from_setup(
                                 Setup {
                                     board: prev_board.clone(),
-                                    promoted: pos.promoted().clone(),
-                                    pockets: pos.pockets().cloned(),
+                                    promoted: pos.promoted(),
+                                    pockets: pos.pockets().copied(),
                                     turn: us,
                                     castling_rights: cr,
                                     ep_square: None,
@@ -186,155 +322,6 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                     // Revert to original
                     prev_board.discard_piece_at(src);
                     prev_board.set_piece_at(sq, piece);
-                }
-            }
-        } else {
-            // Unmoves for Pawns
-            let direction = if us == Color::White { -8 } else { 8 };
-            
-            // Single push
-            if let Some(src) = sq.offset(direction) {
-                if board.piece_at(src).is_none() {
-                    let piece = Piece { role: Role::Pawn, color: us };
-                    prev_board.discard_piece_at(sq);
-                    prev_board.set_piece_at(src, piece);
-                    
-                    if is_valid_predecessor(&prev_board, us, them) {
-                        if let Ok(prev_pos) = Chess::from_setup(
-                            Setup {
-                                board: prev_board.clone(),
-                                promoted: pos.promoted().clone(),
-                                pockets: pos.pockets().cloned(),
-                                turn: us,
-                                castling_rights: pos.castles().castling_rights(),
-                                ep_square: None,
-                                remaining_checks: pos.remaining_checks().copied(),
-                                halfmoves: pos.halfmoves().saturating_sub(1),
-                                fullmoves: if us == Color::Black { pos.fullmoves() } else { NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1)).unwrap() },
-                            },
-                            CastlingMode::Standard,
-                        ) {
-                            parents.push(prev_pos);
-                        }
-                    }
-
-                    // Double push
-                    if src.rank() == if us == Color::White { Rank::Third } else { Rank::Sixth } {
-                        if let Some(src_dbl) = src.offset(direction) {
-                            if board.piece_at(src_dbl).is_none() {
-                                prev_board.discard_piece_at(src);
-                                prev_board.set_piece_at(src_dbl, piece);
-                                
-                                if is_valid_predecessor(&prev_board, us, them) {
-                                    if let Ok(prev_pos_dbl) = Chess::from_setup(
-                                        Setup {
-                                            board: prev_board.clone(),
-                                            promoted: pos.promoted().clone(),
-                                            pockets: pos.pockets().cloned(),
-                                            turn: us,
-                                            castling_rights: pos.castles().castling_rights(),
-                                            ep_square: Some(src),
-                                            remaining_checks: pos.remaining_checks().copied(),
-                                            halfmoves: pos.halfmoves().saturating_sub(1),
-                                            fullmoves: if us == Color::Black { pos.fullmoves() } else { NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1)).unwrap() },
-                                        },
-                                        CastlingMode::Standard,
-                                    ) {
-                                        parents.push(prev_pos_dbl);
-                                    }
-                                }
-                                
-                                // Revert double push
-                                prev_board.discard_piece_at(src_dbl);
-                                prev_board.set_piece_at(src, piece);
-                            }
-                        }
-                    }
-                    
-                    // Revert single push
-                    prev_board.discard_piece_at(src);
-                    prev_board.set_piece_at(sq, piece);
-                }
-            }
-
-            // Pawn Uncaptures
-            let capture_offsets = if us == Color::White { [-7, -9] } else { [7, 9] };
-            for off in capture_offsets {
-                if let Some(src) = sq.offset(off) {
-                    if src.distance(sq) == 1 {
-                        if board.piece_at(src).is_none() {
-                            let piece = Piece { role: Role::Pawn, color: us };
-                            prev_board.discard_piece_at(sq);
-                            prev_board.set_piece_at(src, piece);
-                            
-                            for captured_role in [Role::Queen, Role::Rook, Role::Bishop, Role::Knight, Role::Pawn] {
-                                if captured_role == Role::Pawn && (sq.rank() == Rank::First || sq.rank() == Rank::Eighth) {
-                                    continue;
-                                }
-
-                                prev_board.set_piece_at(sq, Piece { role: captured_role, color: them });
-                                
-                                if is_valid_predecessor(&prev_board, us, them) {
-                                    if let Ok(prev_pos_cap) = Chess::from_setup(
-                                        Setup {
-                                            board: prev_board.clone(),
-                                            promoted: pos.promoted().clone(),
-                                            pockets: pos.pockets().cloned(),
-                                            turn: us,
-                                            castling_rights: pos.castles().castling_rights(),
-                                            ep_square: None,
-                                            remaining_checks: pos.remaining_checks().copied(),
-                                            halfmoves: 0,
-                                            fullmoves: if us == Color::Black { pos.fullmoves() } else { NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1)).unwrap() },
-                                        },
-                                        CastlingMode::Standard,
-                                    ) {
-                                        parents.push(prev_pos_cap);
-                                    }
-                                }
-                            }
-                            
-                            // Revert uncapture
-                            prev_board.discard_piece_at(src);
-                            prev_board.set_piece_at(sq, piece);
-                        }
-
-                        // En Passant Uncapture
-                        if let Some(captured_sq) = sq.offset(direction) {
-                            if board.piece_at(src).is_none() && board.piece_at(captured_sq).is_none() {
-                                let ep_rank = if us == Color::White { Rank::Sixth } else { Rank::Third };
-                                if sq.rank() == ep_rank {
-                                    prev_board.discard_piece_at(sq);
-                                    prev_board.set_piece_at(src, Piece { role: Role::Pawn, color: us });
-                                    prev_board.set_piece_at(captured_sq, Piece { role: Role::Pawn, color: them });
-
-                                    if is_valid_predecessor(&prev_board, us, them) {
-                                        if let Ok(prev_pos_ep) = Chess::from_setup(
-                                            Setup {
-                                                board: prev_board.clone(),
-                                                promoted: pos.promoted().clone(),
-                                                pockets: pos.pockets().cloned(),
-                                                turn: us,
-                                                castling_rights: pos.castles().castling_rights(),
-                                                ep_square: Some(sq),
-                                                remaining_checks: pos.remaining_checks().copied(),
-                                                halfmoves: 0,
-                                                fullmoves: if us == Color::Black { pos.fullmoves() } else { NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1)).unwrap() },
-                                            },
-                                            CastlingMode::Standard,
-                                        ) {
-                                            parents.push(prev_pos_ep);
-                                        }
-                                    }
-                                    
-                                    // Revert EP
-                                    prev_board.discard_piece_at(src);
-                                    prev_board.discard_piece_at(captured_sq);
-                                    prev_board.set_piece_at(sq, Piece { role: Role::Pawn, color: us });
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -355,9 +342,9 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
 
     for (k_sq, r_sq, k_src, r_src, _) in castling_unmoves {
         if board.role_at(k_sq) == Some(Role::King) && board.color_at(k_sq) == Some(us) &&
-           board.role_at(r_sq) == Some(Role::Rook) && board.color_at(r_sq) == Some(us) {
+           board.role_at(r_sq) == Some(Role::Rook) && board.color_at(r_sq) == Some(us)
             
-            if board.piece_at(k_src).is_none() && board.piece_at(r_src).is_none() {
+            && board.piece_at(k_src).is_none() && board.piece_at(r_src).is_none() {
                 prev_board.discard_piece_at(k_sq);
                 prev_board.discard_piece_at(r_sq);
                 prev_board.set_piece_at(k_src, Piece { role: Role::King, color: us });
@@ -408,8 +395,8 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                     if let Ok(prev_pos) = Chess::from_setup(
                         Setup {
                             board: prev_board.clone(),
-                            promoted: pos.promoted().clone(),
-                            pockets: pos.pockets().cloned(),
+                            promoted: pos.promoted(),
+                            pockets: pos.pockets().copied(),
                             turn: us,
                             castling_rights: new_cr,
                             ep_square: None,
@@ -429,6 +416,5 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                 prev_board.set_piece_at(k_sq, Piece { role: Role::King, color: us });
                 prev_board.set_piece_at(r_sq, Piece { role: Role::Rook, color: us });
             }
-        }
     }
 }

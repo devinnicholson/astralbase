@@ -17,7 +17,14 @@ pub struct RetrogradeEngine {
     queue: VecDeque<Chess>,
 }
 
+impl Default for RetrogradeEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RetrogradeEngine {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             tablebase: HashMap::new(),
@@ -38,15 +45,15 @@ impl RetrogradeEngine {
         while let Some(current_pos) = self.queue.pop_front() {
             expanded += 1;
             if expanded > max_expansions {
-                println!("Reached {} expansions. Stopping.", max_expansions);
+                println!("Reached {max_expansions} expansions. Stopping.");
                 break;
             }
 
             let current_value = *self.tablebase.get(&current_pos).unwrap();
             retrograde::inverse_moves(&current_pos, &mut buffer);
 
-            for parent in buffer.iter() {
-                if self.tablebase.contains_key(&parent) {
+            for parent in &buffer {
+                if self.tablebase.contains_key(parent) {
                     continue;
                 }
 
@@ -85,8 +92,8 @@ fn main() {
     let mut engine = RetrogradeEngine::new();
     engine.add_terminal(pos, GameValue::Loss(0));
 
-    println!("Starting backward from checkmate: {}", fen_str);
+    println!("Starting backward from checkmate: {fen_str}");
     let expanded = engine.solve(100);
 
-    println!("Finished backpropagation prototype. Total expanded: {}", expanded);
+    println!("Finished backpropagation prototype. Total expanded: {expanded}");
 }
