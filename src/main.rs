@@ -33,6 +33,7 @@ impl RetrogradeEngine {
 
     pub fn solve(&mut self, max_expansions: usize) -> usize {
         let mut expanded = 0;
+        let mut buffer = Vec::with_capacity(64);
 
         while let Some(current_pos) = self.queue.pop_front() {
             expanded += 1;
@@ -42,9 +43,9 @@ impl RetrogradeEngine {
             }
 
             let current_value = *self.tablebase.get(&current_pos).unwrap();
-            let parents = retrograde::inverse_moves(&current_pos);
+            retrograde::inverse_moves(&current_pos, &mut buffer);
 
-            for parent in parents {
+            for parent in buffer.iter() {
                 if self.tablebase.contains_key(&parent) {
                     continue;
                 }
