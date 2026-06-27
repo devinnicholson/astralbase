@@ -1,3 +1,4 @@
+pub mod dataset_label;
 pub mod retrograde;
 
 use shakmaty::{Chess, Position};
