@@ -27,15 +27,16 @@ fn generated_jsonl_keeps_unsupported_positions_out_of_exact_rows() {
     let jsonl = dataset_label::sample_audited_shard_jsonl().unwrap();
     let rows = dataset_label::parse_and_validate_jsonl(&jsonl).unwrap();
 
-    assert_eq!(rows.len(), 3);
+    assert_eq!(rows.len(), 4);
     assert_eq!(rows[0].label_kind(), LabelKind::Exact);
+    assert_eq!(rows[1].label_kind(), LabelKind::Exact);
     assert!(
-        rows[1..]
+        rows[2..]
             .iter()
             .all(|row| row.label_kind() == LabelKind::Rejected)
     );
 
-    for row in &rows[1..] {
+    for row in &rows[2..] {
         let LabelPayload::Rejected { rejected } = &row.label else {
             panic!("unsupported generated rows must be rejected rows");
         };

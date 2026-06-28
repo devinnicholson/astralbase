@@ -1,6 +1,6 @@
 use crate::domain::{
-    self, FIRST_CONSTRAINED_DOMAIN_DEFINITION, FIRST_CONSTRAINED_DOMAIN_ID, TerminalStatus,
-    ValidatedDomainPosition,
+    self, FIRST_CONSTRAINED_DOMAIN_DEFINITION, FIRST_CONSTRAINED_DOMAIN_ID,
+    ImmediateTerminalTactic, TerminalStatus, ValidatedDomainPosition,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -464,10 +464,14 @@ pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
         .collect()
 }
 
-const SAMPLE_LABEL_CANDIDATES: [SampleLabelCandidate; 3] = [
+const SAMPLE_LABEL_CANDIDATES: [SampleLabelCandidate; 4] = [
     SampleLabelCandidate {
         row_id: "astralbase-w3-exact-terminal-checkmate-001",
         fen: "7k/5KQ1/8/8/8/8/8/8 b - - 0 1",
+    },
+    SampleLabelCandidate {
+        row_id: "astralbase-w4-exact-mate-in-one-001",
+        fen: "7k/5K2/6Q1/8/8/8/8/8 w - - 0 1",
     },
     SampleLabelCandidate {
         row_id: "astralbase-w3-rejected-castling-rights-001",
@@ -488,7 +492,7 @@ struct SampleLabelCandidate {
 impl SampleLabelCandidate {
     fn to_row(self) -> DatasetLabelRow {
         match domain::validate_first_constrained_fen(self.fen) {
-            Ok(validated) => terminal_exact_row(self.row_id, &validated).unwrap_or_else(|| {
+            Ok(validated) => exact_row(self.row_id, &validated).unwrap_or_else(|| {
                 DatasetLabelRow::rejected(
                     self.row_id,
                     FIRST_CONSTRAINED_DOMAIN_ID,
@@ -508,14 +512,27 @@ impl SampleLabelCandidate {
     }
 }
 
+fn exact_row(row_id: &'static str, validated: &ValidatedDomainPosition) -> Option<DatasetLabelRow> {
+    if let Some(terminal_status) = validated.terminal_status() {
+        return Some(terminal_exact_row(row_id, validated, terminal_status));
+    }
+
+    validated
+        .immediate_terminal_tactic()
+        .map(|tactic| immediate_tactic_exact_row(row_id, validated, tactic))
+}
+
 fn terminal_exact_row(
     row_id: &'static str,
     validated: &ValidatedDomainPosition,
-) -> Option<DatasetLabelRow> {
-    let terminal_status = validated.terminal_status()?;
+    terminal_status: TerminalStatus,
+) -> DatasetLabelRow {
     let value = terminal_value(terminal_status);
     let payload = value.exact_value_payload();
     let mut exact = ExactLabel::from_thermograph_payload(&payload);
+    exact
+        .value
+        .insert("solver_scope".to_owned(), "terminal_position".to_owned());
     exact.value.insert(
         "terminal_status".to_owned(),
         terminal_status.as_str().to_owned(),
@@ -524,7 +541,7 @@ fn terminal_exact_row(
         .value
         .insert("legal_move_count".to_owned(), "0".to_owned());
 
-    Some(DatasetLabelRow::exact(
+    DatasetLabelRow::exact(
         row_id,
         FIRST_CONSTRAINED_DOMAIN_ID,
         DatasetPosition::fen(validated.fen()),
@@ -548,7 +565,72 @@ fn terminal_exact_row(
                 ),
             },
         },
-    ))
+    )
+}
+
+fn immediate_tactic_exact_row(
+    row_id: &'static str,
+    validated: &ValidatedDomainPosition,
+    tactic: &ImmediateTerminalTactic,
+) -> DatasetLabelRow {
+    let value = CGTValue::Integer(1);
+    let payload = value.exact_value_payload();
+    let mut exact = ExactLabel::from_thermograph_payload(&payload);
+    let moves = tactic.checkmating_moves().join(",");
+    exact
+        .value
+        .insert("solver_scope".to_owned(), "immediate_checkmate".to_owned());
+    exact
+        .value
+        .insert("terminal_distance_plies".to_owned(), "1".to_owned());
+    exact.value.insert(
+        "legal_move_count".to_owned(),
+        tactic.legal_move_count().to_string(),
+    );
+    exact.value.insert(
+        "checkmating_move_count".to_owned(),
+        tactic.checkmating_move_count().to_string(),
+    );
+    exact
+        .value
+        .insert("checkmating_moves".to_owned(), moves.clone());
+
+    let tactic_digest = stable_digest_hex(
+        format!(
+            "{}|{}|{}",
+            validated.fen(),
+            tactic.legal_move_count(),
+            moves
+        )
+        .as_bytes(),
+    );
+
+    DatasetLabelRow::exact(
+        row_id,
+        FIRST_CONSTRAINED_DOMAIN_ID,
+        DatasetPosition::fen(validated.fen()),
+        exact,
+        ExactProvenance {
+            code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
+                .unwrap_or_else(|_| "workspace".to_owned()),
+            generator: "astralbase_vertical_slice_generator".to_owned(),
+            generator_config_hash: "astralbase:first_constrained_sample:v2".to_owned(),
+            random_seed: 0,
+            domain_definition: FIRST_CONSTRAINED_DOMAIN_DEFINITION.to_owned(),
+            verifier: "astralbase_immediate_terminal_tactic_solver".to_owned(),
+            verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
+            certificate: LabelCertificate {
+                kind: "immediate-checkmate-enumeration+thermograph-exact-value+bitmesh-domain-gate"
+                    .to_owned(),
+                digest: format!(
+                    "bitmesh:{};thermograph:{};frontier:{}",
+                    validated.decomposition().digest.as_str(),
+                    payload.digest,
+                    tactic_digest
+                ),
+            },
+        },
+    )
 }
 
 fn terminal_value(terminal_status: TerminalStatus) -> CGTValue {
@@ -582,6 +664,18 @@ fn thermograph_exact_value_map(payload: &ThermographExactValuePayload) -> BTreeM
     }
 
     value
+}
+
+fn stable_digest_hex(bytes: &[u8]) -> String {
+    const FNV64_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+    const FNV64_PRIME: u64 = 0x0000_0100_0000_01b3;
+
+    let mut hash = FNV64_OFFSET_BASIS;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(FNV64_PRIME);
+    }
+    format!("{hash:016x}")
 }
 
 fn validate_raw_payload_shape(value: &Value) -> Vec<String> {
@@ -721,10 +815,11 @@ mod tests {
     #[test]
     fn sample_audited_shard_is_valid_and_round_trips() {
         let rows = sample_audited_shard();
-        assert_eq!(rows.len(), 3);
+        assert_eq!(rows.len(), 4);
         assert_eq!(rows[0].label_kind(), LabelKind::Exact);
-        assert_eq!(rows[1].label_kind(), LabelKind::Rejected);
+        assert_eq!(rows[1].label_kind(), LabelKind::Exact);
         assert_eq!(rows[2].label_kind(), LabelKind::Rejected);
+        assert_eq!(rows[3].label_kind(), LabelKind::Rejected);
 
         for row in &rows {
             validate_dataset_label_row(row).unwrap();
@@ -751,6 +846,10 @@ mod tests {
         };
 
         assert_eq!(exact.value_class, ExactValueClass::Number);
+        assert_eq!(
+            exact.value.get("solver_scope").unwrap(),
+            "terminal_position"
+        );
         assert_eq!(exact.value.get("value_class").unwrap(), "number");
         assert_eq!(
             exact.value.get("canonical_serialization").unwrap(),
@@ -766,6 +865,37 @@ mod tests {
         assert_eq!(exact.value.get("dyadic_denominator_power").unwrap(), "0");
         assert!(provenance.certificate.digest.contains("bitmesh:"));
         assert!(provenance.certificate.digest.contains("thermograph:"));
+    }
+
+    #[test]
+    fn nonterminal_sample_uses_immediate_tactic_contract() {
+        let rows = sample_audited_shard();
+        let LabelPayload::Exact { exact, provenance } = &rows[1].label else {
+            panic!("second sample row must be exact");
+        };
+
+        assert_eq!(exact.value_class, ExactValueClass::Number);
+        assert_eq!(
+            exact.value.get("solver_scope").unwrap(),
+            "immediate_checkmate"
+        );
+        assert_eq!(
+            exact.value.get("canonical_serialization").unwrap(),
+            "Number(1/2^0)"
+        );
+        assert_eq!(exact.value.get("dyadic_numerator").unwrap(), "1");
+        assert_eq!(exact.value.get("terminal_distance_plies").unwrap(), "1");
+        assert_eq!(exact.value.get("legal_move_count").unwrap(), "26");
+        assert_eq!(exact.value.get("checkmating_move_count").unwrap(), "4");
+        assert_eq!(
+            exact.value.get("checkmating_moves").unwrap(),
+            "Qg6-g7,Qg6-g8,Qg6-h5,Qg6-h6"
+        );
+        assert_eq!(
+            provenance.verifier,
+            "astralbase_immediate_terminal_tactic_solver"
+        );
+        assert!(provenance.certificate.digest.contains("frontier:"));
     }
 
     #[test]

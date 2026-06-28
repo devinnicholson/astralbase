@@ -12,6 +12,7 @@ pub struct ValidatedDomainPosition {
     fen: String,
     position: Chess,
     terminal_status: Option<TerminalStatus>,
+    immediate_terminal_tactic: Option<ImmediateTerminalTactic>,
     decomposition: DecompositionGate,
 }
 
@@ -29,6 +30,11 @@ impl ValidatedDomainPosition {
     #[must_use]
     pub fn terminal_status(&self) -> Option<TerminalStatus> {
         self.terminal_status
+    }
+
+    #[must_use]
+    pub fn immediate_terminal_tactic(&self) -> Option<&ImmediateTerminalTactic> {
+        self.immediate_terminal_tactic.as_ref()
     }
 
     #[must_use]
@@ -81,6 +87,29 @@ impl TerminalStatus {
             Self::Checkmate => "checkmate",
             Self::Stalemate => "stalemate",
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImmediateTerminalTactic {
+    legal_move_count: usize,
+    checkmating_moves: Vec<String>,
+}
+
+impl ImmediateTerminalTactic {
+    #[must_use]
+    pub fn legal_move_count(&self) -> usize {
+        self.legal_move_count
+    }
+
+    #[must_use]
+    pub fn checkmating_move_count(&self) -> usize {
+        self.checkmating_moves.len()
+    }
+
+    #[must_use]
+    pub fn checkmating_moves(&self) -> &[String] {
+        &self.checkmating_moves
     }
 }
 
@@ -180,7 +209,7 @@ impl DomainRejectionCode {
                 "The first constrained mini-endgame domain is capped at 8 pieces."
             }
             Self::NoStrictDecomposition => {
-                "Non-terminal positions require a strict bitmesh decomposition certificate."
+                "Non-terminal positions require either an immediate terminal tactic or a strict bitmesh decomposition certificate."
             }
             Self::CertificateInvalid => {
                 "The bitmesh decomposition certificate failed structural validation."
@@ -236,10 +265,17 @@ pub fn validate_first_constrained_fen(
     }
 
     let terminal_status = terminal_status(&position);
+    let immediate_terminal_tactic = if terminal_status.is_none() {
+        immediate_terminal_tactic(&position)
+    } else {
+        None
+    };
     let decomposition =
         probe_decomposition(&position).map_err(|reason| rejection_report(&fen, vec![reason]))?;
 
-    if terminal_status.is_none() && !matches!(decomposition.status, DecompositionGateStatus::Strict)
+    if terminal_status.is_none()
+        && immediate_terminal_tactic.is_none()
+        && !matches!(decomposition.status, DecompositionGateStatus::Strict)
     {
         let detail = match decomposition.status {
             DecompositionGateStatus::Strict => None,
@@ -260,6 +296,7 @@ pub fn validate_first_constrained_fen(
         fen,
         position,
         terminal_status,
+        immediate_terminal_tactic,
         decomposition,
     })
 }
@@ -273,6 +310,28 @@ fn terminal_status(position: &Chess) -> Option<TerminalStatus> {
         TerminalStatus::Checkmate
     } else {
         TerminalStatus::Stalemate
+    })
+}
+
+fn immediate_terminal_tactic(position: &Chess) -> Option<ImmediateTerminalTactic> {
+    let legal_moves = position.legal_moves();
+    let mut checkmating_moves = Vec::new();
+
+    for mv in &legal_moves {
+        let child = position.clone().play(mv).ok()?;
+        if child.is_checkmate() {
+            checkmating_moves.push(mv.to_string());
+        }
+    }
+
+    if checkmating_moves.is_empty() {
+        return None;
+    }
+
+    checkmating_moves.sort();
+    Some(ImmediateTerminalTactic {
+        legal_move_count: legal_moves.len(),
+        checkmating_moves,
     })
 }
 
@@ -352,6 +411,22 @@ mod tests {
         assert_eq!(
             report.reasons()[0].code,
             DomainRejectionCode::NoStrictDecomposition
+        );
+    }
+
+    #[test]
+    fn mate_in_one_is_inside_first_constrained_domain() {
+        let validated = validate_first_constrained_fen("7k/5K2/6Q1/8/8/8/8/8 w - - 0 1").unwrap();
+        let tactic = validated
+            .immediate_terminal_tactic()
+            .expect("mate-in-one should be accepted as an exact terminal-frontier tactic");
+
+        assert_eq!(validated.terminal_status(), None);
+        assert_eq!(tactic.legal_move_count(), 26);
+        assert_eq!(tactic.checkmating_move_count(), 4);
+        assert_eq!(
+            tactic.checkmating_moves(),
+            ["Qg6-g7", "Qg6-g8", "Qg6-h5", "Qg6-h6"]
         );
     }
 }
