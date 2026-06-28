@@ -1,4 +1,5 @@
 pub mod dataset_label;
+pub mod domain;
 pub mod retrograde;
 
 use shakmaty::{Chess, Position};

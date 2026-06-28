@@ -1,6 +1,11 @@
+use crate::domain::{
+    self, FIRST_CONSTRAINED_DOMAIN_DEFINITION, FIRST_CONSTRAINED_DOMAIN_ID, TerminalStatus,
+    ValidatedDomainPosition,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use thermograph::{CGTValue, ExactValuePayload as ThermographExactValuePayload};
 
 pub const DATASET_LABEL_SCHEMA_VERSION: &str = "partizan.dataset_label.v0";
 const COMMON_REQUIRED_FIELDS: [&str; 5] = [
@@ -177,6 +182,14 @@ impl ExactLabel {
             value_class,
         }
     }
+
+    #[must_use]
+    pub fn from_thermograph_payload(payload: &ThermographExactValuePayload) -> Self {
+        Self::verified(
+            thermograph_exact_value_map(payload),
+            payload.value_class.into(),
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -188,11 +201,23 @@ pub enum ExactStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExactValueClass {
-    Integer,
-    Dyadic,
-    Switch,
-    Fuzzy,
-    Infinitesimal,
+    Number,
+    Star,
+    Up,
+    Down,
+    GameTree,
+}
+
+impl From<thermograph::ExactValueClass> for ExactValueClass {
+    fn from(value_class: thermograph::ExactValueClass) -> Self {
+        match value_class {
+            thermograph::ExactValueClass::Number => Self::Number,
+            thermograph::ExactValueClass::Star => Self::Star,
+            thermograph::ExactValueClass::Up => Self::Up,
+            thermograph::ExactValueClass::Down => Self::Down,
+            thermograph::ExactValueClass::GameTree => Self::GameTree,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -224,6 +249,22 @@ impl RejectedLabel {
     pub fn unsupported(reasons: Vec<String>) -> Self {
         Self {
             status: RejectedStatus::Unsupported,
+            reasons,
+        }
+    }
+
+    #[must_use]
+    pub fn excluded(reasons: Vec<String>) -> Self {
+        Self {
+            status: RejectedStatus::Excluded,
+            reasons,
+        }
+    }
+
+    #[must_use]
+    pub fn error(reasons: Vec<String>) -> Self {
+        Self {
+            status: RejectedStatus::Error,
             reasons,
         }
     }
@@ -417,42 +458,131 @@ pub fn sample_audited_shard_jsonl() -> Result<String, serde_json::Error> {
 
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
-    const DOMAIN: &str = "formal_domain:first_constrained_chess:v0";
+    SAMPLE_LABEL_CANDIDATES
+        .iter()
+        .map(|candidate| candidate.to_row())
+        .collect()
+}
 
-    let mut exact_value = BTreeMap::new();
-    exact_value.insert("canonical".to_owned(), "0".to_owned());
-    exact_value.insert("mean".to_owned(), "0".to_owned());
-    exact_value.insert("temperature".to_owned(), "0".to_owned());
+const SAMPLE_LABEL_CANDIDATES: [SampleLabelCandidate; 3] = [
+    SampleLabelCandidate {
+        row_id: "astralbase-w3-exact-terminal-checkmate-001",
+        fen: "7k/5KQ1/8/8/8/8/8/8 b - - 0 1",
+    },
+    SampleLabelCandidate {
+        row_id: "astralbase-w3-rejected-castling-rights-001",
+        fen: "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+    },
+    SampleLabelCandidate {
+        row_id: "astralbase-w3-rejected-no-strict-decomposition-001",
+        fen: "8/8/8/8/8/8/8/4K2k w - - 0 1",
+    },
+];
 
-    vec![
-        DatasetLabelRow::exact(
-            "astralbase-sample-exact-terminal-001",
-            DOMAIN,
-            DatasetPosition::fen("8/8/8/8/8/8/8/4K2k w - - 0 1"),
-            ExactLabel::verified(exact_value, ExactValueClass::Integer),
-            ExactProvenance {
-                code_commit: "astralbase-scaffold".to_owned(),
-                generator: "astralbase_sample_audited_shard".to_owned(),
-                generator_config_hash: "sha256:astralbase-sample-config".to_owned(),
-                random_seed: 0,
-                domain_definition: "docs/formal_domain.md#first-constrained-domain".to_owned(),
-                verifier: "astralbase_terminal_fixture".to_owned(),
-                verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
-                certificate: LabelCertificate {
-                    kind: "terminal-tablebase".to_owned(),
-                    digest: "sha256:astralbase-sample-terminal".to_owned(),
-                },
+#[derive(Clone, Copy, Debug)]
+struct SampleLabelCandidate {
+    row_id: &'static str,
+    fen: &'static str,
+}
+
+impl SampleLabelCandidate {
+    fn to_row(self) -> DatasetLabelRow {
+        match domain::validate_first_constrained_fen(self.fen) {
+            Ok(validated) => terminal_exact_row(self.row_id, &validated).unwrap_or_else(|| {
+                DatasetLabelRow::rejected(
+                    self.row_id,
+                    FIRST_CONSTRAINED_DOMAIN_ID,
+                    DatasetPosition::fen(self.fen),
+                    RejectedLabel::unsupported(vec![
+                        "exact_solver_terminal_only: exact generation is currently limited to legal terminal positions".to_owned(),
+                    ]),
+                )
+            }),
+            Err(report) => DatasetLabelRow::rejected(
+                self.row_id,
+                FIRST_CONSTRAINED_DOMAIN_ID,
+                DatasetPosition::fen(report.fen()),
+                RejectedLabel::unsupported(report.reason_messages()),
+            ),
+        }
+    }
+}
+
+fn terminal_exact_row(
+    row_id: &'static str,
+    validated: &ValidatedDomainPosition,
+) -> Option<DatasetLabelRow> {
+    let terminal_status = validated.terminal_status()?;
+    let value = terminal_value(terminal_status);
+    let payload = value.exact_value_payload();
+    let mut exact = ExactLabel::from_thermograph_payload(&payload);
+    exact.value.insert(
+        "terminal_status".to_owned(),
+        terminal_status.as_str().to_owned(),
+    );
+    exact
+        .value
+        .insert("legal_move_count".to_owned(), "0".to_owned());
+
+    Some(DatasetLabelRow::exact(
+        row_id,
+        FIRST_CONSTRAINED_DOMAIN_ID,
+        DatasetPosition::fen(validated.fen()),
+        exact,
+        ExactProvenance {
+            code_commit: option_env!("ASTRALBASE_CODE_COMMIT")
+                .unwrap_or("workspace")
+                .to_owned(),
+            generator: "astralbase_vertical_slice_generator".to_owned(),
+            generator_config_hash: "astralbase:first_constrained_sample:v1".to_owned(),
+            random_seed: 0,
+            domain_definition: FIRST_CONSTRAINED_DOMAIN_DEFINITION.to_owned(),
+            verifier: "astralbase_terminal_exact_solver".to_owned(),
+            verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
+            certificate: LabelCertificate {
+                kind: "terminal-legal-move-enumeration+thermograph-exact-value+bitmesh-domain-gate"
+                    .to_owned(),
+                digest: format!(
+                    "bitmesh:{};thermograph:{}",
+                    validated.decomposition().digest.as_str(),
+                    payload.digest
+                ),
             },
-        ),
-        DatasetLabelRow::rejected(
-            "astralbase-sample-rejected-unsupported-001",
-            DOMAIN,
-            DatasetPosition::fen("8/8/8/8/8/8/8/4K2k w KQ - 0 1"),
-            RejectedLabel::unsupported(vec![
-                "Castling rights are outside the first constrained domain.".to_owned(),
-            ]),
-        ),
-    ]
+        },
+    ))
+}
+
+fn terminal_value(terminal_status: TerminalStatus) -> CGTValue {
+    match terminal_status {
+        TerminalStatus::Checkmate => CGTValue::Integer(-1),
+        TerminalStatus::Stalemate => CGTValue::Integer(0),
+    }
+}
+
+fn thermograph_exact_value_map(payload: &ThermographExactValuePayload) -> BTreeMap<String, String> {
+    let mut value = BTreeMap::new();
+    value.insert(
+        "value_class".to_owned(),
+        payload.value_class.as_str().to_owned(),
+    );
+    value.insert(
+        "canonical_serialization".to_owned(),
+        payload.canonical_serialization.clone(),
+    );
+    value.insert("digest".to_owned(), payload.digest.clone());
+
+    if let Some(dyadic) = payload.dyadic {
+        value.insert(
+            "dyadic_numerator".to_owned(),
+            dyadic.numerator().to_string(),
+        );
+        value.insert(
+            "dyadic_denominator_power".to_owned(),
+            dyadic.denominator_power().to_string(),
+        );
+    }
+
+    value
 }
 
 fn validate_raw_payload_shape(value: &Value) -> Vec<String> {
@@ -592,9 +722,10 @@ mod tests {
     #[test]
     fn sample_audited_shard_is_valid_and_round_trips() {
         let rows = sample_audited_shard();
-        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.len(), 3);
         assert_eq!(rows[0].label_kind(), LabelKind::Exact);
         assert_eq!(rows[1].label_kind(), LabelKind::Rejected);
+        assert_eq!(rows[2].label_kind(), LabelKind::Rejected);
 
         for row in &rows {
             validate_dataset_label_row(row).unwrap();
@@ -607,15 +738,64 @@ mod tests {
 
     #[test]
     fn sample_audited_shard_jsonl_is_deterministic() {
-        let jsonl = sample_audited_shard_jsonl().unwrap();
-
         assert_eq!(
-            jsonl,
-            concat!(
-                "{\"schema_version\":\"partizan.dataset_label.v0\",\"row_id\":\"astralbase-sample-exact-terminal-001\",\"domain\":\"formal_domain:first_constrained_chess:v0\",\"position\":{\"encoding\":\"fen\",\"text\":\"8/8/8/8/8/8/8/4K2k w - - 0 1\"},\"label_kind\":\"exact\",\"exact\":{\"status\":\"verified\",\"value\":{\"canonical\":\"0\",\"mean\":\"0\",\"temperature\":\"0\"},\"value_class\":\"integer\"},\"provenance\":{\"code_commit\":\"astralbase-scaffold\",\"generator\":\"astralbase_sample_audited_shard\",\"generator_config_hash\":\"sha256:astralbase-sample-config\",\"random_seed\":0,\"domain_definition\":\"docs/formal_domain.md#first-constrained-domain\",\"verifier\":\"astralbase_terminal_fixture\",\"verifier_version\":\"0.1.0\",\"certificate\":{\"kind\":\"terminal-tablebase\",\"digest\":\"sha256:astralbase-sample-terminal\"}}}\n",
-                "{\"schema_version\":\"partizan.dataset_label.v0\",\"row_id\":\"astralbase-sample-rejected-unsupported-001\",\"domain\":\"formal_domain:first_constrained_chess:v0\",\"position\":{\"encoding\":\"fen\",\"text\":\"8/8/8/8/8/8/8/4K2k w KQ - 0 1\"},\"label_kind\":\"rejected\",\"rejected\":{\"status\":\"unsupported\",\"reasons\":[\"Castling rights are outside the first constrained domain.\"]}}\n"
-            )
+            sample_audited_shard_jsonl().unwrap(),
+            sample_audited_shard_jsonl().unwrap()
         );
+    }
+
+    #[test]
+    fn exact_sample_uses_thermograph_payload_contract() {
+        let rows = sample_audited_shard();
+        let LabelPayload::Exact { exact, provenance } = &rows[0].label else {
+            panic!("first sample row must be exact");
+        };
+
+        assert_eq!(exact.value_class, ExactValueClass::Number);
+        assert_eq!(exact.value.get("value_class").unwrap(), "number");
+        assert_eq!(
+            exact.value.get("canonical_serialization").unwrap(),
+            "Number(-1/2^0)"
+        );
+        assert!(
+            exact
+                .value
+                .get("digest")
+                .is_some_and(|digest| !digest.is_empty())
+        );
+        assert_eq!(exact.value.get("dyadic_numerator").unwrap(), "-1");
+        assert_eq!(exact.value.get("dyadic_denominator_power").unwrap(), "0");
+        assert!(provenance.certificate.digest.contains("bitmesh:"));
+        assert!(provenance.certificate.digest.contains("thermograph:"));
+    }
+
+    #[test]
+    fn unsupported_sample_candidates_are_rejected_not_exact() {
+        let rows = sample_audited_shard();
+        let rejected = rows
+            .iter()
+            .filter(|row| row.label_kind() == LabelKind::Rejected)
+            .collect::<Vec<_>>();
+
+        assert_eq!(rejected.len(), 2);
+        assert!(rejected.iter().any(|row| {
+            match &row.label {
+                LabelPayload::Rejected { rejected } => rejected
+                    .reasons
+                    .iter()
+                    .any(|reason| reason.starts_with("castling_rights:")),
+                _ => false,
+            }
+        }));
+        assert!(rejected.iter().any(|row| {
+            match &row.label {
+                LabelPayload::Rejected { rejected } => rejected
+                    .reasons
+                    .iter()
+                    .any(|reason| reason.starts_with("no_strict_decomposition:")),
+                _ => false,
+            }
+        }));
     }
 
     #[test]
