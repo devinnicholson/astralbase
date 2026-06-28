@@ -530,9 +530,8 @@ fn terminal_exact_row(
         DatasetPosition::fen(validated.fen()),
         exact,
         ExactProvenance {
-            code_commit: option_env!("ASTRALBASE_CODE_COMMIT")
-                .unwrap_or("workspace")
-                .to_owned(),
+            code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
+                .unwrap_or_else(|_| "workspace".to_owned()),
             generator: "astralbase_vertical_slice_generator".to_owned(),
             generator_config_hash: "astralbase:first_constrained_sample:v1".to_owned(),
             random_seed: 0,
