@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 use thermograph::{CGTValue, ExactValuePayload as ThermographExactValuePayload};
 
 pub const DATASET_LABEL_SCHEMA_VERSION: &str = "partizan.dataset_label.v0";
+pub const FORMAL_CGT_DOMAIN_ID: &str = "formal_domain:thermograph_golden_cgt:v0";
+pub const FORMAL_CGT_DOMAIN_DEFINITION: &str = "thermograph:golden_values#hot_one_minus_one";
 const COMMON_REQUIRED_FIELDS: [&str; 5] = [
     "schema_version",
     "row_id",
@@ -121,12 +123,21 @@ impl DatasetPosition {
             text: text.into(),
         }
     }
+
+    #[must_use]
+    pub fn cgt_canonical(text: impl Into<String>) -> Self {
+        Self {
+            encoding: PositionEncoding::CgtCanonical,
+            text: text.into(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PositionEncoding {
     Fen,
+    CgtCanonical,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -205,6 +216,7 @@ pub enum ExactValueClass {
     Star,
     Up,
     Down,
+    Switch,
     GameTree,
 }
 
@@ -215,6 +227,7 @@ impl From<thermograph::ExactValueClass> for ExactValueClass {
             thermograph::ExactValueClass::Star => Self::Star,
             thermograph::ExactValueClass::Up => Self::Up,
             thermograph::ExactValueClass::Down => Self::Down,
+            thermograph::ExactValueClass::Switch => Self::Switch,
             thermograph::ExactValueClass::GameTree => Self::GameTree,
         }
     }
@@ -458,10 +471,15 @@ pub fn sample_audited_shard_jsonl() -> Result<String, serde_json::Error> {
 
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
-    SAMPLE_LABEL_CANDIDATES
+    let mut rows = SAMPLE_LABEL_CANDIDATES
         .iter()
         .map(|candidate| candidate.to_row())
-        .collect()
+        .collect::<Vec<_>>();
+    rows.insert(
+        2,
+        formal_switch_exact_row("astralbase-w5-exact-formal-switch-001"),
+    );
+    rows
 }
 
 const SAMPLE_LABEL_CANDIDATES: [SampleLabelCandidate; 4] = [
@@ -575,17 +593,31 @@ fn immediate_tactic_exact_row(
 ) -> DatasetLabelRow {
     let value = CGTValue::Integer(1);
     let payload = value.exact_value_payload();
+    let frontier_value = terminal_frontier_value(tactic);
+    let frontier_payload = frontier_value.exact_value_payload();
+    let (frontier_temperature, frontier_mean) = frontier_value.thermograph();
     let mut exact = ExactLabel::from_thermograph_payload(&payload);
     let moves = tactic.checkmating_moves().join(",");
-    exact
-        .value
-        .insert("solver_scope".to_owned(), "immediate_checkmate".to_owned());
+    let stalemating_moves = join_or_none(tactic.stalemating_moves());
+    let terminal_child_statuses = terminal_child_statuses(tactic).join(",");
+    let terminal_child_values = terminal_child_values(tactic).join(",");
+    exact.value.insert(
+        "solver_scope".to_owned(),
+        "immediate_terminal_frontier".to_owned(),
+    );
     exact
         .value
         .insert("terminal_distance_plies".to_owned(), "1".to_owned());
+    exact
+        .value
+        .insert("terminal_frontier_depth_plies".to_owned(), "1".to_owned());
     exact.value.insert(
         "legal_move_count".to_owned(),
         tactic.legal_move_count().to_string(),
+    );
+    exact.value.insert(
+        "terminal_child_count".to_owned(),
+        tactic.terminal_child_count().to_string(),
     );
     exact.value.insert(
         "checkmating_move_count".to_owned(),
@@ -594,13 +626,52 @@ fn immediate_tactic_exact_row(
     exact
         .value
         .insert("checkmating_moves".to_owned(), moves.clone());
+    exact.value.insert(
+        "stalemating_move_count".to_owned(),
+        tactic.stalemating_move_count().to_string(),
+    );
+    exact
+        .value
+        .insert("stalemating_moves".to_owned(), stalemating_moves);
+    exact.value.insert(
+        "terminal_child_statuses".to_owned(),
+        terminal_child_statuses.clone(),
+    );
+    exact
+        .value
+        .insert("terminal_child_values".to_owned(), terminal_child_values);
+    exact.value.insert(
+        "frontier_value_class".to_owned(),
+        frontier_payload.value_class.as_str().to_owned(),
+    );
+    exact.value.insert(
+        "frontier_canonical_serialization".to_owned(),
+        frontier_payload.canonical_serialization.clone(),
+    );
+    exact.value.insert(
+        "frontier_digest".to_owned(),
+        frontier_payload.digest.clone(),
+    );
+    exact
+        .value
+        .insert("frontier_mean".to_owned(), frontier_mean.to_string());
+    exact.value.insert(
+        "frontier_temperature".to_owned(),
+        frontier_temperature.to_string(),
+    );
+    exact.value.insert(
+        "frontier_perspective".to_owned(),
+        "parent_side_to_move".to_owned(),
+    );
 
     let tactic_digest = stable_digest_hex(
         format!(
-            "{}|{}|{}",
+            "{}|{}|{}|{}|{}",
             validated.fen(),
             tactic.legal_move_count(),
-            moves
+            moves,
+            terminal_child_statuses,
+            frontier_payload.digest
         )
         .as_bytes(),
     );
@@ -623,14 +694,122 @@ fn immediate_tactic_exact_row(
                 kind: "immediate-checkmate-enumeration+thermograph-exact-value+bitmesh-domain-gate"
                     .to_owned(),
                 digest: format!(
-                    "bitmesh:{};thermograph:{};frontier:{}",
+                    "bitmesh:{};thermograph:{};frontier:{};frontier_thermograph:{}",
                     validated.decomposition().digest.as_str(),
                     payload.digest,
-                    tactic_digest
+                    tactic_digest,
+                    frontier_payload.digest
                 ),
             },
         },
     )
+}
+
+fn formal_switch_exact_row(row_id: &'static str) -> DatasetLabelRow {
+    let value = CGTValue::GameTree {
+        left: vec![CGTValue::Integer(1)],
+        right: vec![CGTValue::Integer(-1)],
+    };
+    let payload = value.exact_value_payload();
+    let (temperature, mean) = value.thermograph();
+    let mut exact = ExactLabel::from_thermograph_payload(&payload);
+    exact.value.insert(
+        "solver_scope".to_owned(),
+        "formal_cgt_switch_fixture".to_owned(),
+    );
+    exact
+        .value
+        .insert("left_options".to_owned(), "Number(1/2^0)".to_owned());
+    exact
+        .value
+        .insert("right_options".to_owned(), "Number(-1/2^0)".to_owned());
+    exact.value.insert("mean".to_owned(), mean.to_string());
+    exact
+        .value
+        .insert("temperature".to_owned(), temperature.to_string());
+    exact
+        .value
+        .insert("dyadic_payload".to_owned(), "none".to_owned());
+
+    DatasetLabelRow::exact(
+        row_id,
+        FORMAL_CGT_DOMAIN_ID,
+        DatasetPosition::cgt_canonical(payload.canonical_serialization.clone()),
+        exact,
+        ExactProvenance {
+            code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
+                .unwrap_or_else(|_| "workspace".to_owned()),
+            generator: "astralbase_formal_cgt_fixture_generator".to_owned(),
+            generator_config_hash: "astralbase:formal_cgt_switch_fixture:v1".to_owned(),
+            random_seed: 0,
+            domain_definition: FORMAL_CGT_DOMAIN_DEFINITION.to_owned(),
+            verifier: "thermograph_switch_fixture_verifier".to_owned(),
+            verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
+            certificate: LabelCertificate {
+                kind: "thermograph-canonical-switch-fixture".to_owned(),
+                digest: format!("thermograph:{}", payload.digest),
+            },
+        },
+    )
+}
+
+fn terminal_frontier_value(tactic: &ImmediateTerminalTactic) -> CGTValue {
+    let mut left = Vec::new();
+    for _ in tactic.checkmating_moves() {
+        left.push(CGTValue::Integer(1));
+    }
+    for _ in tactic.stalemating_moves() {
+        left.push(CGTValue::Integer(0));
+    }
+
+    CGTValue::GameTree {
+        left,
+        right: Vec::new(),
+    }
+}
+
+fn terminal_child_statuses(tactic: &ImmediateTerminalTactic) -> Vec<String> {
+    let mut statuses = Vec::new();
+    statuses.extend(
+        tactic
+            .checkmating_moves()
+            .iter()
+            .map(|mv| format!("{mv}=checkmate")),
+    );
+    statuses.extend(
+        tactic
+            .stalemating_moves()
+            .iter()
+            .map(|mv| format!("{mv}=stalemate")),
+    );
+    statuses.sort();
+    statuses
+}
+
+fn terminal_child_values(tactic: &ImmediateTerminalTactic) -> Vec<String> {
+    let mut values = Vec::new();
+    values.extend(
+        tactic
+            .checkmating_moves()
+            .iter()
+            .map(|mv| format!("{mv}=Number(1/2^0)")),
+    );
+    values.extend(
+        tactic
+            .stalemating_moves()
+            .iter()
+            .map(|mv| format!("{mv}=Number(0/2^0)")),
+    );
+    values.sort();
+    values
+}
+
+fn join_or_none(values: &[String]) -> String {
+    if values.is_empty() {
+        "none".to_owned()
+    } else {
+        values.join(",")
+    }
 }
 
 fn terminal_value(terminal_status: TerminalStatus) -> CGTValue {
@@ -815,11 +994,12 @@ mod tests {
     #[test]
     fn sample_audited_shard_is_valid_and_round_trips() {
         let rows = sample_audited_shard();
-        assert_eq!(rows.len(), 4);
+        assert_eq!(rows.len(), 5);
         assert_eq!(rows[0].label_kind(), LabelKind::Exact);
         assert_eq!(rows[1].label_kind(), LabelKind::Exact);
-        assert_eq!(rows[2].label_kind(), LabelKind::Rejected);
+        assert_eq!(rows[2].label_kind(), LabelKind::Exact);
         assert_eq!(rows[3].label_kind(), LabelKind::Rejected);
+        assert_eq!(rows[4].label_kind(), LabelKind::Rejected);
 
         for row in &rows {
             validate_dataset_label_row(row).unwrap();
@@ -877,7 +1057,7 @@ mod tests {
         assert_eq!(exact.value_class, ExactValueClass::Number);
         assert_eq!(
             exact.value.get("solver_scope").unwrap(),
-            "immediate_checkmate"
+            "immediate_terminal_frontier"
         );
         assert_eq!(
             exact.value.get("canonical_serialization").unwrap(),
@@ -886,16 +1066,82 @@ mod tests {
         assert_eq!(exact.value.get("dyadic_numerator").unwrap(), "1");
         assert_eq!(exact.value.get("terminal_distance_plies").unwrap(), "1");
         assert_eq!(exact.value.get("legal_move_count").unwrap(), "26");
+        assert_eq!(exact.value.get("terminal_child_count").unwrap(), "14");
         assert_eq!(exact.value.get("checkmating_move_count").unwrap(), "4");
         assert_eq!(
             exact.value.get("checkmating_moves").unwrap(),
             "Qg6-g7,Qg6-g8,Qg6-h5,Qg6-h6"
+        );
+        assert_eq!(exact.value.get("stalemating_move_count").unwrap(), "10");
+        assert_eq!(
+            exact.value.get("stalemating_moves").unwrap(),
+            "Kf7-e6,Kf7-e7,Kf7-e8,Kf7-f6,Kf7-f8,Qg6-b1,Qg6-c2,Qg6-d3,Qg6-e4,Qg6-f5"
+        );
+        assert_eq!(
+            exact.value.get("frontier_value_class").unwrap(),
+            "game_tree"
+        );
+        assert_eq!(
+            exact.value.get("frontier_canonical_serialization").unwrap(),
+            "GameTree(L[Number(0/2^0),Number(1/2^0)];R[])"
+        );
+        assert_eq!(exact.value.get("frontier_mean").unwrap(), "2");
+        assert_eq!(exact.value.get("frontier_temperature").unwrap(), "-1");
+        assert_eq!(
+            exact.value.get("frontier_perspective").unwrap(),
+            "parent_side_to_move"
+        );
+        assert!(
+            exact
+                .value
+                .get("terminal_child_statuses")
+                .unwrap()
+                .contains("Qg6-g7=checkmate")
         );
         assert_eq!(
             provenance.verifier,
             "astralbase_immediate_terminal_tactic_solver"
         );
         assert!(provenance.certificate.digest.contains("frontier:"));
+        assert!(
+            provenance
+                .certificate
+                .digest
+                .contains("frontier_thermograph:")
+        );
+    }
+
+    #[test]
+    fn formal_switch_sample_uses_non_number_exact_contract() {
+        let rows = sample_audited_shard();
+        let switch_row = &rows[2];
+        let LabelPayload::Exact { exact, provenance } = &switch_row.label else {
+            panic!("third sample row must be exact");
+        };
+
+        assert_eq!(switch_row.domain, FORMAL_CGT_DOMAIN_ID);
+        assert_eq!(switch_row.position.encoding, PositionEncoding::CgtCanonical);
+        assert_eq!(exact.value_class, ExactValueClass::Switch);
+        assert_eq!(
+            exact.value.get("solver_scope").unwrap(),
+            "formal_cgt_switch_fixture"
+        );
+        assert_eq!(exact.value.get("value_class").unwrap(), "switch");
+        assert_eq!(
+            exact.value.get("canonical_serialization").unwrap(),
+            "GameTree(L[Number(1/2^0)];R[Number(-1/2^0)])"
+        );
+        assert_eq!(exact.value.get("digest").unwrap(), "0cc26090a9cea850");
+        assert_eq!(exact.value.get("temperature").unwrap(), "1");
+        assert_eq!(exact.value.get("mean").unwrap(), "0");
+        assert!(!exact.value.contains_key("dyadic_numerator"));
+        assert_eq!(provenance.verifier, "thermograph_switch_fixture_verifier");
+        assert!(
+            provenance
+                .certificate
+                .digest
+                .contains("thermograph:0cc26090a9cea850")
+        );
     }
 
     #[test]

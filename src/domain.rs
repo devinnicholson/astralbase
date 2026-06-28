@@ -94,6 +94,7 @@ impl TerminalStatus {
 pub struct ImmediateTerminalTactic {
     legal_move_count: usize,
     checkmating_moves: Vec<String>,
+    stalemating_moves: Vec<String>,
 }
 
 impl ImmediateTerminalTactic {
@@ -110,6 +111,21 @@ impl ImmediateTerminalTactic {
     #[must_use]
     pub fn checkmating_moves(&self) -> &[String] {
         &self.checkmating_moves
+    }
+
+    #[must_use]
+    pub fn stalemating_move_count(&self) -> usize {
+        self.stalemating_moves.len()
+    }
+
+    #[must_use]
+    pub fn stalemating_moves(&self) -> &[String] {
+        &self.stalemating_moves
+    }
+
+    #[must_use]
+    pub fn terminal_child_count(&self) -> usize {
+        self.checkmating_move_count() + self.stalemating_move_count()
     }
 }
 
@@ -316,22 +332,29 @@ fn terminal_status(position: &Chess) -> Option<TerminalStatus> {
 fn immediate_terminal_tactic(position: &Chess) -> Option<ImmediateTerminalTactic> {
     let legal_moves = position.legal_moves();
     let mut checkmating_moves = Vec::new();
+    let mut stalemating_moves = Vec::new();
 
     for mv in &legal_moves {
         let child = position.clone().play(mv).ok()?;
-        if child.is_checkmate() {
-            checkmating_moves.push(mv.to_string());
+        if child.legal_moves().is_empty() {
+            if child.is_check() {
+                checkmating_moves.push(mv.to_string());
+            } else {
+                stalemating_moves.push(mv.to_string());
+            }
         }
     }
 
-    if checkmating_moves.is_empty() {
+    if checkmating_moves.is_empty() && stalemating_moves.is_empty() {
         return None;
     }
 
     checkmating_moves.sort();
+    stalemating_moves.sort();
     Some(ImmediateTerminalTactic {
         legal_move_count: legal_moves.len(),
         checkmating_moves,
+        stalemating_moves,
     })
 }
 
@@ -424,9 +447,18 @@ mod tests {
         assert_eq!(validated.terminal_status(), None);
         assert_eq!(tactic.legal_move_count(), 26);
         assert_eq!(tactic.checkmating_move_count(), 4);
+        assert_eq!(tactic.stalemating_move_count(), 10);
+        assert_eq!(tactic.terminal_child_count(), 14);
         assert_eq!(
             tactic.checkmating_moves(),
             ["Qg6-g7", "Qg6-g8", "Qg6-h5", "Qg6-h6"]
+        );
+        assert_eq!(
+            tactic.stalemating_moves(),
+            [
+                "Kf7-e6", "Kf7-e7", "Kf7-e8", "Kf7-f6", "Kf7-f8", "Qg6-b1", "Qg6-c2", "Qg6-d3",
+                "Qg6-e4", "Qg6-f5"
+            ]
         );
     }
 }
