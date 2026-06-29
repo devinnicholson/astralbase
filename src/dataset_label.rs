@@ -11,6 +11,7 @@ pub const DATASET_LABEL_SCHEMA_VERSION: &str = "partizan.dataset_label.v0";
 pub const FORMAL_CGT_DOMAIN_ID: &str = "formal_domain:thermograph_golden_cgt:v0";
 pub const FORMAL_CGT_DOMAIN_DEFINITION: &str = "thermograph:golden_values#hot_one_minus_one";
 pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
+pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 const COMMON_REQUIRED_FIELDS: [&str; 5] = [
     "schema_version",
     "row_id",
@@ -45,6 +46,12 @@ const KQK_FRONTIER_EXACT_CONTEXT: ExactGenerationContext = ExactGenerationContex
     generator: "astralbase_kqk_frontier_generator",
     terminal_config_hash: "astralbase:kqk_terminal_frontier:v1",
     frontier_config_hash: "astralbase:kqk_terminal_frontier:v1",
+};
+
+const KRK_FRONTIER_EXACT_CONTEXT: ExactGenerationContext = ExactGenerationContext {
+    generator: "astralbase_krk_frontier_generator",
+    terminal_config_hash: "astralbase:krk_terminal_frontier:v1",
+    frontier_config_hash: "astralbase:krk_terminal_frontier:v1",
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -493,6 +500,12 @@ pub fn frontier_audited_shard_jsonl(limit: usize) -> Result<String, serde_json::
     serialize_jsonl(&frontier_audited_shard(limit))
 }
 
+pub fn family_frontier_audited_shard_jsonl(
+    limit_per_family: usize,
+) -> Result<String, serde_json::Error> {
+    serialize_jsonl(&family_frontier_audited_shard(limit_per_family))
+}
+
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
     let mut rows = SAMPLE_LABEL_CANDIDATES
@@ -508,6 +521,41 @@ pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
 
 #[must_use]
 pub fn frontier_audited_shard(limit: usize) -> Vec<DatasetLabelRow> {
+    frontier_family_rows(
+        "KQK",
+        'Q',
+        KQK_FRONTIER_EXACT_CONTEXT,
+        "astralbase-w6-kqk-frontier",
+        limit,
+    )
+}
+
+#[must_use]
+pub fn family_frontier_audited_shard(limit_per_family: usize) -> Vec<DatasetLabelRow> {
+    let mut rows = frontier_family_rows(
+        "KQK",
+        'Q',
+        KQK_FRONTIER_EXACT_CONTEXT,
+        "astralbase-w7-kqk-frontier",
+        limit_per_family,
+    );
+    rows.extend(frontier_family_rows(
+        "KRK",
+        'R',
+        KRK_FRONTIER_EXACT_CONTEXT,
+        "astralbase-w7-krk-frontier",
+        limit_per_family,
+    ));
+    rows
+}
+
+fn frontier_family_rows(
+    family: &'static str,
+    white_piece: char,
+    context: ExactGenerationContext,
+    row_id_prefix: &'static str,
+    limit: usize,
+) -> Vec<DatasetLabelRow> {
     if limit == 0 {
         return Vec::new();
     }
@@ -517,13 +565,13 @@ pub fn frontier_audited_shard(limit: usize) -> Vec<DatasetLabelRow> {
     let mut exact_rows = Vec::with_capacity(exact_target);
     let mut rejected_rows = Vec::with_capacity(rejected_target);
 
-    for (candidate_index, fen) in kqk_candidate_fens().into_iter().enumerate() {
+    for (candidate_index, fen) in material_candidate_fens(white_piece).into_iter().enumerate() {
         if exact_rows.len() >= exact_target && rejected_rows.len() >= rejected_target {
             break;
         }
 
-        let row_id = format!("astralbase-w6-kqk-frontier-{candidate_index:06}");
-        let Some(row) = generated_kqk_row(&row_id, fen.as_str()) else {
+        let row_id = format!("{row_id_prefix}-{candidate_index:06}");
+        let Some(row) = generated_material_row(&row_id, fen.as_str(), context, family) else {
             continue;
         };
 
@@ -547,7 +595,7 @@ fn frontier_exact_target(limit: usize) -> usize {
     }
 }
 
-fn kqk_candidate_fens() -> Vec<String> {
+fn material_candidate_fens(white_piece: char) -> Vec<String> {
     let mut fens = Vec::new();
 
     for side_to_move in ["w", "b"] {
@@ -556,13 +604,16 @@ fn kqk_candidate_fens() -> Vec<String> {
                 if black_king == white_king {
                     continue;
                 }
-                for white_queen in 0..64 {
-                    if white_queen == white_king || white_queen == black_king {
+                for white_piece_square in 0..64 {
+                    if white_piece_square == white_king || white_piece_square == black_king {
                         continue;
                     }
 
-                    let board =
-                        board_fen(&[(white_king, 'K'), (black_king, 'k'), (white_queen, 'Q')]);
+                    let board = board_fen(&[
+                        (white_king, 'K'),
+                        (black_king, 'k'),
+                        (white_piece_square, white_piece),
+                    ]);
                     fens.push(format!("{board} {side_to_move} - - 0 1"));
                 }
             }
@@ -655,16 +706,21 @@ impl SampleLabelCandidate {
     }
 }
 
-fn generated_kqk_row(row_id: &str, fen: &str) -> Option<DatasetLabelRow> {
+fn generated_material_row(
+    row_id: &str,
+    fen: &str,
+    context: ExactGenerationContext,
+    family: &str,
+) -> Option<DatasetLabelRow> {
     match domain::validate_first_constrained_fen(fen) {
-        Ok(validated) => exact_row(row_id, &validated, KQK_FRONTIER_EXACT_CONTEXT).or_else(|| {
+        Ok(validated) => exact_row(row_id, &validated, context).or_else(|| {
             Some(DatasetLabelRow::rejected(
                 row_id,
                 FIRST_CONSTRAINED_DOMAIN_ID,
                 DatasetPosition::fen(fen),
-                RejectedLabel::unsupported(vec![
-                    "frontier_generator: legal KQK candidate has no terminal or one-ply terminal-frontier certificate".to_owned(),
-                ]),
+                RejectedLabel::unsupported(vec![format!(
+                    "frontier_generator: legal {family} candidate has no terminal or one-ply terminal-frontier certificate"
+                )]),
             ))
         }),
         Err(report) => {
@@ -1229,6 +1285,31 @@ mod tests {
             exact.1.generator_config_hash,
             "astralbase:kqk_terminal_frontier:v1"
         );
+    }
+
+    #[test]
+    fn family_frontier_shard_includes_kqk_and_krk_families() {
+        let rows = family_frontier_audited_shard(20);
+        assert_eq!(rows.len(), 40);
+        assert!(
+            rows.iter()
+                .any(|row| row.row_id.starts_with("astralbase-w7-kqk-frontier-"))
+        );
+        assert!(
+            rows.iter()
+                .any(|row| row.row_id.starts_with("astralbase-w7-krk-frontier-"))
+        );
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.label_kind() == LabelKind::Exact)
+                .count(),
+            8
+        );
+        assert!(rows.iter().any(|row| match &row.label {
+            LabelPayload::Exact { provenance, .. } =>
+                provenance.generator == "astralbase_krk_frontier_generator",
+            _ => false,
+        }));
     }
 
     #[test]

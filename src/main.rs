@@ -22,6 +22,15 @@ fn main() {
             );
             return;
         }
+        Some("--family-frontier-label-shard") => {
+            let limit_per_family = parse_family_frontier_limit(args);
+            print!(
+                "{}",
+                dataset_label::family_frontier_audited_shard_jsonl(limit_per_family)
+                    .expect("family frontier audited shard must serialize")
+            );
+            return;
+        }
         Some(arg) => {
             eprintln!("unsupported argument: {arg}");
             std::process::exit(2);
@@ -40,6 +49,30 @@ fn main() {
 
     let expanded = engine.solve(100);
     println!("Astralbase prototype expanded {expanded} nodes from {fen_str}");
+}
+
+fn parse_family_frontier_limit(mut args: impl Iterator<Item = String>) -> usize {
+    match args.next().as_deref() {
+        None => dataset_label::DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY,
+        Some("--limit-per-family") => {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("--limit-per-family requires a positive integer");
+                std::process::exit(2);
+            });
+            if let Some(extra) = args.next() {
+                eprintln!("unsupported argument for --family-frontier-label-shard: {extra}");
+                std::process::exit(2);
+            }
+            value.parse::<usize>().unwrap_or_else(|error| {
+                eprintln!("invalid --limit-per-family: {error}");
+                std::process::exit(2);
+            })
+        }
+        Some(arg) => {
+            eprintln!("unsupported argument for --family-frontier-label-shard: {arg}");
+            std::process::exit(2);
+        }
+    }
 }
 
 fn parse_frontier_limit(mut args: impl Iterator<Item = String>) -> usize {
