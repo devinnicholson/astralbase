@@ -12,6 +12,7 @@ pub const FORMAL_CGT_DOMAIN_ID: &str = "formal_domain:thermograph_golden_cgt:v0"
 pub const FORMAL_CGT_DOMAIN_DEFINITION: &str = "thermograph:golden_values#hot_one_minus_one";
 pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
+pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 const COMMON_REQUIRED_FIELDS: [&str; 5] = [
     "schema_version",
     "row_id",
@@ -52,6 +53,18 @@ const KRK_FRONTIER_EXACT_CONTEXT: ExactGenerationContext = ExactGenerationContex
     generator: "astralbase_krk_frontier_generator",
     terminal_config_hash: "astralbase:krk_terminal_frontier:v1",
     frontier_config_hash: "astralbase:krk_terminal_frontier:v1",
+};
+
+const KBK_FRONTIER_EXACT_CONTEXT: ExactGenerationContext = ExactGenerationContext {
+    generator: "astralbase_kbk_frontier_generator",
+    terminal_config_hash: "astralbase:kbk_terminal_frontier:v1",
+    frontier_config_hash: "astralbase:kbk_terminal_frontier:v1",
+};
+
+const KNK_FRONTIER_EXACT_CONTEXT: ExactGenerationContext = ExactGenerationContext {
+    generator: "astralbase_knk_frontier_generator",
+    terminal_config_hash: "astralbase:knk_terminal_frontier:v1",
+    frontier_config_hash: "astralbase:knk_terminal_frontier:v1",
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -506,6 +519,12 @@ pub fn family_frontier_audited_shard_jsonl(
     serialize_jsonl(&family_frontier_audited_shard(limit_per_family))
 }
 
+pub fn expanded_family_frontier_audited_shard_jsonl(
+    limit_per_family: usize,
+) -> Result<String, serde_json::Error> {
+    serialize_jsonl(&expanded_family_frontier_audited_shard(limit_per_family))
+}
+
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
     let mut rows = SAMPLE_LABEL_CANDIDATES
@@ -544,6 +563,26 @@ pub fn family_frontier_audited_shard(limit_per_family: usize) -> Vec<DatasetLabe
         'R',
         KRK_FRONTIER_EXACT_CONTEXT,
         "astralbase-w7-krk-frontier",
+        limit_per_family,
+    ));
+    rows
+}
+
+#[must_use]
+pub fn expanded_family_frontier_audited_shard(limit_per_family: usize) -> Vec<DatasetLabelRow> {
+    let mut rows = family_frontier_audited_shard(limit_per_family);
+    rows.extend(frontier_family_rows(
+        "KBK",
+        'B',
+        KBK_FRONTIER_EXACT_CONTEXT,
+        "astralbase-w12-kbk-frontier",
+        limit_per_family,
+    ));
+    rows.extend(frontier_family_rows(
+        "KNK",
+        'N',
+        KNK_FRONTIER_EXACT_CONTEXT,
+        "astralbase-w12-knk-frontier",
         limit_per_family,
     ));
     rows
@@ -1310,6 +1349,44 @@ mod tests {
                 provenance.generator == "astralbase_krk_frontier_generator",
             _ => false,
         }));
+    }
+
+    #[test]
+    fn expanded_family_frontier_shard_includes_major_and_minor_families() {
+        let rows = expanded_family_frontier_audited_shard(20);
+        assert_eq!(rows.len(), 80);
+        assert_eq!(rows, expanded_family_frontier_audited_shard(20));
+
+        for prefix in [
+            "astralbase-w7-kqk-frontier-",
+            "astralbase-w7-krk-frontier-",
+            "astralbase-w12-kbk-frontier-",
+            "astralbase-w12-knk-frontier-",
+        ] {
+            assert!(
+                rows.iter().any(|row| row.row_id.starts_with(prefix)),
+                "missing expanded frontier family prefix {prefix}"
+            );
+        }
+
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.label_kind() == LabelKind::Exact)
+                .count(),
+            16
+        );
+        for generator in [
+            "astralbase_kbk_frontier_generator",
+            "astralbase_knk_frontier_generator",
+        ] {
+            assert!(
+                rows.iter().any(|row| match &row.label {
+                    LabelPayload::Exact { provenance, .. } => provenance.generator == generator,
+                    _ => false,
+                }),
+                "missing exact provenance for {generator}"
+            );
+        }
     }
 
     #[test]
