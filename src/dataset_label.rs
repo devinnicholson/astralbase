@@ -10,6 +10,7 @@ use thermograph::{CGTValue, ExactValuePayload as ThermographExactValuePayload};
 pub const DATASET_LABEL_SCHEMA_VERSION: &str = "partizan.dataset_label.v0";
 pub const FORMAL_CGT_DOMAIN_ID: &str = "formal_domain:thermograph_golden_cgt:v0";
 pub const FORMAL_CGT_DOMAIN_DEFINITION: &str = "thermograph:golden_values#hot_one_minus_one";
+pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 const COMMON_REQUIRED_FIELDS: [&str; 5] = [
     "schema_version",
     "row_id",
@@ -26,6 +27,25 @@ const AMBIGUOUS_TOP_LEVEL_FIELDS: [&str; 6] = [
     "mean_value",
     "temperature",
 ];
+
+#[derive(Clone, Copy, Debug)]
+struct ExactGenerationContext {
+    generator: &'static str,
+    terminal_config_hash: &'static str,
+    frontier_config_hash: &'static str,
+}
+
+const SAMPLE_EXACT_CONTEXT: ExactGenerationContext = ExactGenerationContext {
+    generator: "astralbase_vertical_slice_generator",
+    terminal_config_hash: "astralbase:first_constrained_sample:v1",
+    frontier_config_hash: "astralbase:first_constrained_sample:v2",
+};
+
+const KQK_FRONTIER_EXACT_CONTEXT: ExactGenerationContext = ExactGenerationContext {
+    generator: "astralbase_kqk_frontier_generator",
+    terminal_config_hash: "astralbase:kqk_terminal_frontier:v1",
+    frontier_config_hash: "astralbase:kqk_terminal_frontier:v1",
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DatasetLabelRow {
@@ -469,6 +489,10 @@ pub fn sample_audited_shard_jsonl() -> Result<String, serde_json::Error> {
     serialize_jsonl(&sample_audited_shard())
 }
 
+pub fn frontier_audited_shard_jsonl(limit: usize) -> Result<String, serde_json::Error> {
+    serialize_jsonl(&frontier_audited_shard(limit))
+}
+
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
     let mut rows = SAMPLE_LABEL_CANDIDATES
@@ -480,6 +504,106 @@ pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
         formal_switch_exact_row("astralbase-w5-exact-formal-switch-001"),
     );
     rows
+}
+
+#[must_use]
+pub fn frontier_audited_shard(limit: usize) -> Vec<DatasetLabelRow> {
+    if limit == 0 {
+        return Vec::new();
+    }
+
+    let exact_target = frontier_exact_target(limit);
+    let rejected_target = limit.saturating_sub(exact_target);
+    let mut exact_rows = Vec::with_capacity(exact_target);
+    let mut rejected_rows = Vec::with_capacity(rejected_target);
+
+    for (candidate_index, fen) in kqk_candidate_fens().into_iter().enumerate() {
+        if exact_rows.len() >= exact_target && rejected_rows.len() >= rejected_target {
+            break;
+        }
+
+        let row_id = format!("astralbase-w6-kqk-frontier-{candidate_index:06}");
+        let Some(row) = generated_kqk_row(&row_id, fen.as_str()) else {
+            continue;
+        };
+
+        match row.label_kind() {
+            LabelKind::Exact if exact_rows.len() < exact_target => exact_rows.push(row),
+            LabelKind::Rejected if rejected_rows.len() < rejected_target => rejected_rows.push(row),
+            _ => {}
+        }
+    }
+
+    exact_rows.extend(rejected_rows);
+    exact_rows.truncate(limit);
+    exact_rows
+}
+
+fn frontier_exact_target(limit: usize) -> usize {
+    if limit == 0 {
+        0
+    } else {
+        limit.min((limit / 5).max(1))
+    }
+}
+
+fn kqk_candidate_fens() -> Vec<String> {
+    let mut fens = Vec::new();
+
+    for side_to_move in ["w", "b"] {
+        for white_king in 0..64 {
+            for black_king in 0..64 {
+                if black_king == white_king {
+                    continue;
+                }
+                for white_queen in 0..64 {
+                    if white_queen == white_king || white_queen == black_king {
+                        continue;
+                    }
+
+                    let board =
+                        board_fen(&[(white_king, 'K'), (black_king, 'k'), (white_queen, 'Q')]);
+                    fens.push(format!("{board} {side_to_move} - - 0 1"));
+                }
+            }
+        }
+    }
+
+    fens
+}
+
+fn board_fen(pieces: &[(usize, char)]) -> String {
+    let mut board = [' '; 64];
+    for (square, piece) in pieces {
+        board[*square] = *piece;
+    }
+
+    let mut ranks = Vec::new();
+    for rank in (0..8).rev() {
+        let mut rank_text = String::new();
+        let mut empty_run = 0;
+
+        for file in 0..8 {
+            let square = rank * 8 + file;
+            let piece = board[square];
+            if piece == ' ' {
+                empty_run += 1;
+            } else {
+                if empty_run > 0 {
+                    rank_text.push_str(empty_run.to_string().as_str());
+                    empty_run = 0;
+                }
+                rank_text.push(piece);
+            }
+        }
+
+        if empty_run > 0 {
+            rank_text.push_str(empty_run.to_string().as_str());
+        }
+        ranks.push(rank_text);
+    }
+
+    ranks.join("/")
 }
 
 const SAMPLE_LABEL_CANDIDATES: [SampleLabelCandidate; 4] = [
@@ -510,16 +634,17 @@ struct SampleLabelCandidate {
 impl SampleLabelCandidate {
     fn to_row(self) -> DatasetLabelRow {
         match domain::validate_first_constrained_fen(self.fen) {
-            Ok(validated) => exact_row(self.row_id, &validated).unwrap_or_else(|| {
-                DatasetLabelRow::rejected(
-                    self.row_id,
-                    FIRST_CONSTRAINED_DOMAIN_ID,
-                    DatasetPosition::fen(self.fen),
-                    RejectedLabel::unsupported(vec![
-                        "exact_solver_terminal_only: exact generation is currently limited to legal terminal positions".to_owned(),
-                    ]),
-                )
-            }),
+            Ok(validated) => exact_row(self.row_id, &validated, SAMPLE_EXACT_CONTEXT)
+                .unwrap_or_else(|| {
+                    DatasetLabelRow::rejected(
+                        self.row_id,
+                        FIRST_CONSTRAINED_DOMAIN_ID,
+                        DatasetPosition::fen(self.fen),
+                        RejectedLabel::unsupported(vec![
+                            "exact_solver_terminal_only: exact generation is currently limited to legal terminal positions".to_owned(),
+                        ]),
+                    )
+                }),
             Err(report) => DatasetLabelRow::rejected(
                 self.row_id,
                 FIRST_CONSTRAINED_DOMAIN_ID,
@@ -530,20 +655,65 @@ impl SampleLabelCandidate {
     }
 }
 
-fn exact_row(row_id: &'static str, validated: &ValidatedDomainPosition) -> Option<DatasetLabelRow> {
+fn generated_kqk_row(row_id: &str, fen: &str) -> Option<DatasetLabelRow> {
+    match domain::validate_first_constrained_fen(fen) {
+        Ok(validated) => exact_row(row_id, &validated, KQK_FRONTIER_EXACT_CONTEXT).or_else(|| {
+            Some(DatasetLabelRow::rejected(
+                row_id,
+                FIRST_CONSTRAINED_DOMAIN_ID,
+                DatasetPosition::fen(fen),
+                RejectedLabel::unsupported(vec![
+                    "frontier_generator: legal KQK candidate has no terminal or one-ply terminal-frontier certificate".to_owned(),
+                ]),
+            ))
+        }),
+        Err(report) => {
+            if report
+                .reasons()
+                .iter()
+                .any(|reason| matches!(
+                    reason.code,
+                    domain::DomainRejectionCode::InvalidFen
+                        | domain::DomainRejectionCode::InvalidPosition
+                ))
+            {
+                return None;
+            }
+
+            Some(DatasetLabelRow::rejected(
+                row_id,
+                FIRST_CONSTRAINED_DOMAIN_ID,
+                DatasetPosition::fen(report.fen()),
+                RejectedLabel::unsupported(report.reason_messages()),
+            ))
+        }
+    }
+}
+
+fn exact_row(
+    row_id: &str,
+    validated: &ValidatedDomainPosition,
+    context: ExactGenerationContext,
+) -> Option<DatasetLabelRow> {
     if let Some(terminal_status) = validated.terminal_status() {
-        return Some(terminal_exact_row(row_id, validated, terminal_status));
+        return Some(terminal_exact_row(
+            row_id,
+            validated,
+            terminal_status,
+            context,
+        ));
     }
 
     validated
         .immediate_terminal_tactic()
-        .map(|tactic| immediate_tactic_exact_row(row_id, validated, tactic))
+        .map(|tactic| immediate_tactic_exact_row(row_id, validated, tactic, context))
 }
 
 fn terminal_exact_row(
-    row_id: &'static str,
+    row_id: &str,
     validated: &ValidatedDomainPosition,
     terminal_status: TerminalStatus,
+    context: ExactGenerationContext,
 ) -> DatasetLabelRow {
     let value = terminal_value(terminal_status);
     let payload = value.exact_value_payload();
@@ -567,8 +737,8 @@ fn terminal_exact_row(
         ExactProvenance {
             code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
                 .unwrap_or_else(|_| "workspace".to_owned()),
-            generator: "astralbase_vertical_slice_generator".to_owned(),
-            generator_config_hash: "astralbase:first_constrained_sample:v1".to_owned(),
+            generator: context.generator.to_owned(),
+            generator_config_hash: context.terminal_config_hash.to_owned(),
             random_seed: 0,
             domain_definition: FIRST_CONSTRAINED_DOMAIN_DEFINITION.to_owned(),
             verifier: "astralbase_terminal_exact_solver".to_owned(),
@@ -587,9 +757,10 @@ fn terminal_exact_row(
 }
 
 fn immediate_tactic_exact_row(
-    row_id: &'static str,
+    row_id: &str,
     validated: &ValidatedDomainPosition,
     tactic: &ImmediateTerminalTactic,
+    context: ExactGenerationContext,
 ) -> DatasetLabelRow {
     let value = CGTValue::Integer(1);
     let payload = value.exact_value_payload();
@@ -684,8 +855,8 @@ fn immediate_tactic_exact_row(
         ExactProvenance {
             code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
                 .unwrap_or_else(|_| "workspace".to_owned()),
-            generator: "astralbase_vertical_slice_generator".to_owned(),
-            generator_config_hash: "astralbase:first_constrained_sample:v2".to_owned(),
+            generator: context.generator.to_owned(),
+            generator_config_hash: context.frontier_config_hash.to_owned(),
             random_seed: 0,
             domain_definition: FIRST_CONSTRAINED_DOMAIN_DEFINITION.to_owned(),
             verifier: "astralbase_immediate_terminal_tactic_solver".to_owned(),
@@ -705,7 +876,7 @@ fn immediate_tactic_exact_row(
     )
 }
 
-fn formal_switch_exact_row(row_id: &'static str) -> DatasetLabelRow {
+fn formal_switch_exact_row(row_id: &str) -> DatasetLabelRow {
     let value = CGTValue::GameTree {
         left: vec![CGTValue::Integer(1)],
         right: vec![CGTValue::Integer(-1)],
@@ -1015,6 +1186,48 @@ mod tests {
         assert_eq!(
             sample_audited_shard_jsonl().unwrap(),
             sample_audited_shard_jsonl().unwrap()
+        );
+    }
+
+    #[test]
+    fn frontier_audited_shard_is_deterministic_and_mixed() {
+        let rows = frontier_audited_shard(25);
+        assert_eq!(rows.len(), 25);
+        assert_eq!(rows, frontier_audited_shard(25));
+
+        let exact_count = rows
+            .iter()
+            .filter(|row| row.label_kind() == LabelKind::Exact)
+            .count();
+        let rejected_count = rows
+            .iter()
+            .filter(|row| row.label_kind() == LabelKind::Rejected)
+            .count();
+
+        assert_eq!(exact_count, 5);
+        assert_eq!(rejected_count, 20);
+        assert!(
+            rows.iter()
+                .all(|row| row.row_id.starts_with("astralbase-w6-kqk-frontier-"))
+        );
+    }
+
+    #[test]
+    fn frontier_exact_rows_use_kqk_generator_provenance() {
+        let rows = frontier_audited_shard(10);
+        let exact = rows
+            .iter()
+            .find_map(|row| match &row.label {
+                LabelPayload::Exact { exact, provenance } => Some((exact, provenance)),
+                _ => None,
+            })
+            .expect("frontier shard should include exact rows");
+
+        assert_eq!(exact.0.value_class, ExactValueClass::Number);
+        assert_eq!(exact.1.generator, "astralbase_kqk_frontier_generator");
+        assert_eq!(
+            exact.1.generator_config_hash,
+            "astralbase:kqk_terminal_frontier:v1"
         );
     }
 

@@ -13,6 +13,15 @@ fn main() {
             );
             return;
         }
+        Some("--frontier-label-shard") => {
+            let limit = parse_frontier_limit(args);
+            print!(
+                "{}",
+                dataset_label::frontier_audited_shard_jsonl(limit)
+                    .expect("frontier audited shard must serialize")
+            );
+            return;
+        }
         Some(arg) => {
             eprintln!("unsupported argument: {arg}");
             std::process::exit(2);
@@ -31,4 +40,28 @@ fn main() {
 
     let expanded = engine.solve(100);
     println!("Astralbase prototype expanded {expanded} nodes from {fen_str}");
+}
+
+fn parse_frontier_limit(mut args: impl Iterator<Item = String>) -> usize {
+    match args.next().as_deref() {
+        None => dataset_label::DEFAULT_FRONTIER_SHARD_LIMIT,
+        Some("--limit") => {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("--limit requires a positive integer");
+                std::process::exit(2);
+            });
+            if let Some(extra) = args.next() {
+                eprintln!("unsupported argument for --frontier-label-shard: {extra}");
+                std::process::exit(2);
+            }
+            value.parse::<usize>().unwrap_or_else(|error| {
+                eprintln!("invalid --limit: {error}");
+                std::process::exit(2);
+            })
+        }
+        Some(arg) => {
+            eprintln!("unsupported argument for --frontier-label-shard: {arg}");
+            std::process::exit(2);
+        }
+    }
 }
