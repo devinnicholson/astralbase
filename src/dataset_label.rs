@@ -289,6 +289,48 @@ pub struct ExactProvenance {
 pub struct LabelCertificate {
     pub kind: String,
     pub digest: String,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub composition: Option<Box<CompositionCertificate>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompositionCertificate {
+    pub decomposition_digest: String,
+    pub composition_digest: String,
+    pub component_values: BTreeMap<String, String>,
+    pub result_value_digest: String,
+}
+
+impl LabelCertificate {
+    #[must_use]
+    pub fn legacy(kind: impl Into<String>, digest: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            digest: digest.into(),
+            composition: None,
+        }
+    }
+
+    #[must_use]
+    pub fn composition(
+        kind: impl Into<String>,
+        digest: impl Into<String>,
+        decomposition_digest: impl Into<String>,
+        composition_digest: impl Into<String>,
+        component_values: BTreeMap<String, String>,
+        result_value_digest: impl Into<String>,
+    ) -> Self {
+        Self {
+            kind: kind.into(),
+            digest: digest.into(),
+            composition: Some(Box::new(CompositionCertificate {
+                decomposition_digest: decomposition_digest.into(),
+                composition_digest: composition_digest.into(),
+                component_values,
+                result_value_digest: result_value_digest.into(),
+            })),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -838,15 +880,14 @@ fn terminal_exact_row(
             domain_definition: FIRST_CONSTRAINED_DOMAIN_DEFINITION.to_owned(),
             verifier: "astralbase_terminal_exact_solver".to_owned(),
             verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
-            certificate: LabelCertificate {
-                kind: "terminal-legal-move-enumeration+thermograph-exact-value+bitmesh-domain-gate"
-                    .to_owned(),
-                digest: format!(
+            certificate: LabelCertificate::legacy(
+                "terminal-legal-move-enumeration+thermograph-exact-value+bitmesh-domain-gate",
+                format!(
                     "bitmesh:{};thermograph:{}",
                     validated.decomposition().digest.as_str(),
                     payload.digest
                 ),
-            },
+            ),
         },
     )
 }
@@ -956,17 +997,16 @@ fn immediate_tactic_exact_row(
             domain_definition: FIRST_CONSTRAINED_DOMAIN_DEFINITION.to_owned(),
             verifier: "astralbase_immediate_terminal_tactic_solver".to_owned(),
             verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
-            certificate: LabelCertificate {
-                kind: "immediate-checkmate-enumeration+thermograph-exact-value+bitmesh-domain-gate"
-                    .to_owned(),
-                digest: format!(
+            certificate: LabelCertificate::legacy(
+                "immediate-checkmate-enumeration+thermograph-exact-value+bitmesh-domain-gate",
+                format!(
                     "bitmesh:{};thermograph:{};frontier:{};frontier_thermograph:{}",
                     validated.decomposition().digest.as_str(),
                     payload.digest,
                     tactic_digest,
                     frontier_payload.digest
                 ),
-            },
+            ),
         },
     )
 }
@@ -1011,10 +1051,10 @@ fn formal_switch_exact_row(row_id: &str) -> DatasetLabelRow {
             domain_definition: FORMAL_CGT_DOMAIN_DEFINITION.to_owned(),
             verifier: "thermograph_switch_fixture_verifier".to_owned(),
             verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
-            certificate: LabelCertificate {
-                kind: "thermograph-canonical-switch-fixture".to_owned(),
-                digest: format!("thermograph:{}", payload.digest),
-            },
+            certificate: LabelCertificate::legacy(
+                "thermograph-canonical-switch-fixture",
+                format!("thermograph:{}", payload.digest),
+            ),
         },
     )
 }
@@ -1215,14 +1255,46 @@ fn validate_exact_provenance(provenance: &ExactProvenance, issues: &mut Vec<Labe
         "provenance.verifier_version",
         issues,
     );
+    validate_label_certificate(&provenance.certificate, issues);
+}
+
+fn validate_label_certificate(
+    certificate: &LabelCertificate,
+    issues: &mut Vec<LabelValidationIssue>,
+) {
     require_non_empty(
-        provenance.certificate.kind.as_str(),
+        certificate.kind.as_str(),
         "provenance.certificate.kind",
         issues,
     );
     require_non_empty(
-        provenance.certificate.digest.as_str(),
+        certificate.digest.as_str(),
         "provenance.certificate.digest",
+        issues,
+    );
+
+    let Some(composition) = certificate.composition.as_deref() else {
+        return;
+    };
+
+    require_non_empty(
+        composition.decomposition_digest.as_str(),
+        "provenance.certificate.decomposition_digest",
+        issues,
+    );
+    require_non_empty(
+        composition.composition_digest.as_str(),
+        "provenance.certificate.composition_digest",
+        issues,
+    );
+    require_non_empty_map(
+        &composition.component_values,
+        "provenance.certificate.component_values",
+        issues,
+    );
+    require_non_empty(
+        composition.result_value_digest.as_str(),
+        "provenance.certificate.result_value_digest",
         issues,
     );
 }
@@ -1282,6 +1354,151 @@ mod tests {
             sample_audited_shard_jsonl().unwrap(),
             sample_audited_shard_jsonl().unwrap()
         );
+    }
+
+    #[test]
+    fn legacy_certificates_keep_two_field_json_shape() {
+        let certificate = LabelCertificate::legacy("legacy-kind", "legacy-digest");
+
+        assert_eq!(
+            serde_json::to_value(&certificate).unwrap(),
+            serde_json::json!({
+                "kind": "legacy-kind",
+                "digest": "legacy-digest",
+            })
+        );
+
+        let sample_jsonl = sample_audited_shard_jsonl().unwrap();
+        for structured_field in [
+            "decomposition_digest",
+            "composition_digest",
+            "component_values",
+            "result_value_digest",
+        ] {
+            assert!(
+                !sample_jsonl.contains(structured_field),
+                "legacy shard JSON unexpectedly emitted {structured_field}"
+            );
+        }
+    }
+
+    #[test]
+    fn composition_certificate_serializes_and_round_trips() {
+        let component_values = BTreeMap::from([
+            (
+                "component:king-and-queen-vs-king".to_owned(),
+                "thermograph:component-value-a".to_owned(),
+            ),
+            (
+                "component:king-and-rook-vs-king".to_owned(),
+                "thermograph:component-value-b".to_owned(),
+            ),
+        ]);
+        let certificate = LabelCertificate::composition(
+            "bitmesh-composition+thermograph-exact-value",
+            "composition-certificate:root",
+            "bitmesh:decomposition-root",
+            "bitmesh:composition-root",
+            component_values,
+            "thermograph:result-value",
+        );
+
+        assert_eq!(
+            serde_json::to_value(&certificate).unwrap(),
+            serde_json::json!({
+                "kind": "bitmesh-composition+thermograph-exact-value",
+                "digest": "composition-certificate:root",
+                "decomposition_digest": "bitmesh:decomposition-root",
+                "composition_digest": "bitmesh:composition-root",
+                "component_values": {
+                    "component:king-and-queen-vs-king": "thermograph:component-value-a",
+                    "component:king-and-rook-vs-king": "thermograph:component-value-b",
+                },
+                "result_value_digest": "thermograph:result-value",
+            })
+        );
+
+        let row = DatasetLabelRow::exact(
+            "composition-certificate-scaffold",
+            FORMAL_CGT_DOMAIN_ID,
+            DatasetPosition::cgt_canonical("GameTree(L[Number(1/2^0)];R[])"),
+            ExactLabel::verified(
+                BTreeMap::from([
+                    (
+                        "canonical_serialization".to_owned(),
+                        "GameTree(L[Number(1/2^0)];R[])".to_owned(),
+                    ),
+                    ("digest".to_owned(), "thermograph:result-value".to_owned()),
+                ]),
+                ExactValueClass::GameTree,
+            ),
+            ExactProvenance {
+                code_commit: "workspace".to_owned(),
+                generator: "composition_certificate_scaffold_test".to_owned(),
+                generator_config_hash: "astralbase:composition-scaffold:v0".to_owned(),
+                random_seed: 0,
+                domain_definition: FORMAL_CGT_DOMAIN_DEFINITION.to_owned(),
+                verifier: "composition_certificate_scaffold_verifier".to_owned(),
+                verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
+                certificate,
+            },
+        );
+
+        validate_dataset_label_row(&row).unwrap();
+        let jsonl = serialize_jsonl(std::slice::from_ref(&row)).unwrap();
+        assert_eq!(parse_and_validate_jsonl(&jsonl).unwrap(), vec![row]);
+        assert!(jsonl.contains("\"component_values\""));
+        assert!(jsonl.contains("\"result_value_digest\""));
+    }
+
+    #[test]
+    fn blank_composition_certificate_fields_are_rejected() {
+        let certificate = LabelCertificate {
+            kind: "blank-composition".to_owned(),
+            digest: "digest".to_owned(),
+            composition: Some(Box::new(CompositionCertificate {
+                decomposition_digest: String::new(),
+                composition_digest: String::new(),
+                component_values: BTreeMap::new(),
+                result_value_digest: String::new(),
+            })),
+        };
+        let row = DatasetLabelRow::exact(
+            "blank-composition-certificate",
+            FORMAL_CGT_DOMAIN_ID,
+            DatasetPosition::cgt_canonical("Number(0/2^0)"),
+            ExactLabel::verified(
+                BTreeMap::from([("digest".to_owned(), "thermograph:zero".to_owned())]),
+                ExactValueClass::Number,
+            ),
+            ExactProvenance {
+                code_commit: "workspace".to_owned(),
+                generator: "composition_certificate_scaffold_test".to_owned(),
+                generator_config_hash: "astralbase:composition-scaffold:v0".to_owned(),
+                random_seed: 0,
+                domain_definition: FORMAL_CGT_DOMAIN_DEFINITION.to_owned(),
+                verifier: "composition_certificate_scaffold_verifier".to_owned(),
+                verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
+                certificate,
+            },
+        );
+
+        let issues = validate_dataset_label_row(&row).unwrap_err();
+        assert!(issues.iter().any(|issue| {
+            issue
+                .message
+                .contains("composition_digest must be non-empty")
+        }));
+        assert!(
+            issues
+                .iter()
+                .any(|issue| { issue.message.contains("component_values must be non-empty") })
+        );
+        assert!(issues.iter().any(|issue| {
+            issue
+                .message
+                .contains("result_value_digest must be non-empty")
+        }));
     }
 
     #[test]

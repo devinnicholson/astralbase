@@ -5,6 +5,10 @@ use std::str::FromStr;
 fn main() {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
+        Some("--help" | "-h") => {
+            print_help();
+            return;
+        }
         Some("--sample-label-shard") => {
             print!(
                 "{}",
@@ -58,6 +62,19 @@ fn main() {
 
     let expanded = engine.solve(100);
     println!("Astralbase prototype expanded {expanded} nodes from {fen_str}");
+}
+
+fn print_help() {
+    println!(
+        "Usage: astralbase [COMMAND]\n\
+\n\
+Commands:\n\
+  --sample-label-shard\n\
+  --frontier-label-shard [--limit N]\n\
+  --family-frontier-label-shard [--limit-per-family N]\n\
+  --expanded-family-frontier-label-shard [--limit-per-family N]\n\
+  --help\n"
+    );
 }
 
 fn parse_family_frontier_limit(mut args: impl Iterator<Item = String>) -> usize {
