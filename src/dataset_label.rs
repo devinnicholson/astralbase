@@ -2,8 +2,13 @@ use crate::domain::{
     self, FIRST_CONSTRAINED_DOMAIN_DEFINITION, FIRST_CONSTRAINED_DOMAIN_ID,
     ImmediateTerminalTactic, TerminalStatus, ValidatedDomainPosition,
 };
+use bitmesh::{
+    self, CompositionCertificate as BitmeshCompositionCertificate, CompositionComponentValue,
+    DecompositionStatus,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use shakmaty::{Board, Color, Square};
 use std::collections::BTreeMap;
 use thermograph::{CGTValue, ExactValuePayload as ThermographExactValuePayload};
 
@@ -13,6 +18,15 @@ pub const FORMAL_CGT_DOMAIN_DEFINITION: &str = "thermograph:golden_values#hot_on
 pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
+pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 4;
+pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
+pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
+    "docs/formal_domain.md#wave-17-composition-fixture";
+pub const COMPOSITION_FIXTURE_LOCKED_WALL_FEN: &str = "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 1";
+pub const COMPOSITION_FIXTURE_MISSING_COMPONENT_FEN: &str =
+    "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 2";
+pub const COMPOSITION_FIXTURE_STALE_COMPOSITION_FEN: &str =
+    "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 3";
 const COMMON_REQUIRED_FIELDS: [&str; 5] = [
     "schema_version",
     "row_id",
@@ -567,6 +581,10 @@ pub fn expanded_family_frontier_audited_shard_jsonl(
     serialize_jsonl(&expanded_family_frontier_audited_shard(limit_per_family))
 }
 
+pub fn composition_hard_target_shard_jsonl(limit: usize) -> Result<String, serde_json::Error> {
+    serialize_jsonl(&composition_hard_target_shard(limit))
+}
+
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
     let mut rows = SAMPLE_LABEL_CANDIDATES
@@ -627,6 +645,30 @@ pub fn expanded_family_frontier_audited_shard(limit_per_family: usize) -> Vec<Da
         "astralbase-w12-knk-frontier",
         limit_per_family,
     ));
+    rows
+}
+
+#[must_use]
+pub fn composition_hard_target_shard(limit: usize) -> Vec<DatasetLabelRow> {
+    let mut rows = vec![
+        composition_fixture_exact_row("astralbase-w17-composition-exact-wall-001"),
+        composition_fixture_rejected_row(
+            "astralbase-w17-composition-rejected-weak-decomposition-001",
+            "8/8/8/8/8/8/8/4K2k w - - 0 1",
+            "weak_decomposition: no strict decomposition certificate is available",
+        ),
+        composition_fixture_rejected_row(
+            "astralbase-w17-composition-rejected-missing-component-value-001",
+            COMPOSITION_FIXTURE_MISSING_COMPONENT_FEN,
+            "missing_component_value_digest: every strict component root needs a verified value digest",
+        ),
+        composition_fixture_rejected_row(
+            "astralbase-w17-composition-rejected-stale-composition-001",
+            COMPOSITION_FIXTURE_STALE_COMPOSITION_FEN,
+            "stale_composition_digest: BMCOMPOSE digest does not match the referenced decomposition and component values",
+        ),
+    ];
+    rows.truncate(limit);
     rows
 }
 
@@ -844,6 +886,152 @@ fn exact_row(
     validated
         .immediate_terminal_tactic()
         .map(|tactic| immediate_tactic_exact_row(row_id, validated, tactic, context))
+}
+
+fn composition_fixture_exact_row(row_id: &str) -> DatasetLabelRow {
+    let board = composition_fixture_board();
+    let decomposition = bitmesh::certify_decomposition(&board);
+    assert_eq!(
+        decomposition.status,
+        DecompositionStatus::Strict,
+        "composition fixture must have a strict decomposition certificate",
+    );
+    let decomposition_digest = decomposition
+        .digest()
+        .expect("composition fixture decomposition must digest");
+
+    let mut component_roots = decomposition
+        .components
+        .iter()
+        .map(|component| component.root)
+        .collect::<Vec<_>>();
+    component_roots.sort();
+
+    let mut component_values = BTreeMap::new();
+    let mut bmcompose_component_values = Vec::new();
+    let mut component_value_summaries = Vec::new();
+    let mut result_integer = 0;
+    for (index, component_root) in component_roots.iter().enumerate() {
+        let component_integer =
+            i32::try_from(index + 1).expect("composition fixture component index fits i32");
+        result_integer += component_integer;
+        let payload = CGTValue::Integer(component_integer).exact_value_payload();
+        component_values.insert(component_root.to_string(), payload.digest.clone());
+        bmcompose_component_values.push(CompositionComponentValue {
+            component_root: *component_root,
+            value_digest: payload.digest.clone(),
+        });
+        component_value_summaries.push(format!(
+            "{component_root}={}",
+            payload.canonical_serialization
+        ));
+    }
+
+    let result_payload = CGTValue::Integer(result_integer).exact_value_payload();
+    let bmcompose = BitmeshCompositionCertificate {
+        decomposition_digest,
+        component_values: bmcompose_component_values,
+        result_value_digest: result_payload.digest.clone(),
+    };
+    bmcompose
+        .validate_against_decomposition(&decomposition)
+        .expect("composition fixture must satisfy root coverage");
+    let composition_digest = bmcompose
+        .digest()
+        .expect("composition fixture must digest")
+        .to_string();
+
+    let mut exact = ExactLabel::from_thermograph_payload(&result_payload);
+    exact.value.insert(
+        "solver_scope".to_owned(),
+        "composition_certificate_fixture".to_owned(),
+    );
+    exact.value.insert(
+        "composition_value_rule".to_owned(),
+        "component_index_integer_sum_fixture_v0".to_owned(),
+    );
+    exact.value.insert(
+        "component_count".to_owned(),
+        component_roots.len().to_string(),
+    );
+    exact.value.insert(
+        "component_roots".to_owned(),
+        component_roots
+            .iter()
+            .map(u8::to_string)
+            .collect::<Vec<_>>()
+            .join(","),
+    );
+    exact.value.insert(
+        "component_values".to_owned(),
+        component_value_summaries.join(","),
+    );
+
+    DatasetLabelRow::exact(
+        row_id,
+        COMPOSITION_FIXTURE_DOMAIN_ID,
+        DatasetPosition::fen(COMPOSITION_FIXTURE_LOCKED_WALL_FEN),
+        exact,
+        ExactProvenance {
+            code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
+                .unwrap_or_else(|_| "workspace".to_owned()),
+            generator: "astralbase_composition_fixture_generator".to_owned(),
+            generator_config_hash: "astralbase:composition_fixture:v1".to_owned(),
+            random_seed: 0,
+            domain_definition: COMPOSITION_FIXTURE_DOMAIN_DEFINITION.to_owned(),
+            verifier: "bitmesh_bmcompose_fixture_sum_verifier".to_owned(),
+            verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
+            certificate: LabelCertificate::composition(
+                "bitmesh-bmcompose-v1+thermograph-exact-value+fixture-sum",
+                format!(
+                    "bitmesh:{};bmcompose:{};thermograph:{}",
+                    decomposition_digest, composition_digest, result_payload.digest
+                ),
+                decomposition_digest.to_string(),
+                composition_digest,
+                component_values,
+                result_payload.digest,
+            ),
+        },
+    )
+}
+
+fn composition_fixture_board() -> Board {
+    let mut board = Board::empty();
+
+    for sq in [
+        Square::A4,
+        Square::B4,
+        Square::C4,
+        Square::D4,
+        Square::E4,
+        Square::F4,
+        Square::G4,
+        Square::H4,
+        Square::A5,
+        Square::B5,
+        Square::C5,
+        Square::D5,
+        Square::E5,
+        Square::F5,
+        Square::G5,
+        Square::H5,
+    ] {
+        board.set_piece_at(sq, Color::White.pawn());
+    }
+
+    board.set_piece_at(Square::A1, Color::White.knight());
+    board.set_piece_at(Square::H8, Color::Black.knight());
+    board
+}
+
+fn composition_fixture_rejected_row(row_id: &str, fen: &str, reason: &str) -> DatasetLabelRow {
+    DatasetLabelRow::rejected(
+        row_id,
+        COMPOSITION_FIXTURE_DOMAIN_ID,
+        DatasetPosition::fen(fen),
+        RejectedLabel::excluded(vec![reason.to_owned()]),
+    )
 }
 
 fn terminal_exact_row(
@@ -1499,6 +1687,65 @@ mod tests {
                 .message
                 .contains("result_value_digest must be non-empty")
         }));
+    }
+
+    #[test]
+    fn composition_hard_target_shard_is_deterministic_and_mixed() {
+        let rows = composition_hard_target_shard(DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT);
+        assert_eq!(rows.len(), DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT);
+        assert_eq!(rows[0].label_kind(), LabelKind::Exact);
+        assert!(
+            rows.iter()
+                .any(|row| matches!(row.label, LabelPayload::Rejected { .. }))
+        );
+
+        for row in &rows {
+            validate_dataset_label_row(row).unwrap();
+        }
+
+        assert_eq!(
+            composition_hard_target_shard_jsonl(DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT)
+                .unwrap(),
+            composition_hard_target_shard_jsonl(DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn composition_hard_target_exact_row_carries_nested_certificate() {
+        let rows = composition_hard_target_shard(1);
+        let LabelPayload::Exact { exact, provenance } = &rows[0].label else {
+            panic!("first composition fixture row should be exact");
+        };
+
+        assert_eq!(
+            exact.value.get("solver_scope").map(String::as_str),
+            Some("composition_certificate_fixture")
+        );
+        assert_eq!(
+            exact
+                .value
+                .get("composition_value_rule")
+                .map(String::as_str),
+            Some("component_index_integer_sum_fixture_v0")
+        );
+
+        let composition = provenance
+            .certificate
+            .composition
+            .as_deref()
+            .expect("composition exact row must carry structured certificate fields");
+        assert_eq!(composition.decomposition_digest.len(), 64);
+        assert_eq!(composition.composition_digest.len(), 64);
+        assert!(!composition.component_values.is_empty());
+        assert_eq!(
+            composition.result_value_digest,
+            exact
+                .value
+                .get("digest")
+                .expect("exact result digest is present")
+                .as_str()
+        );
     }
 
     #[test]

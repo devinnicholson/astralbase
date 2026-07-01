@@ -44,6 +44,15 @@ fn main() {
             );
             return;
         }
+        Some("--composition-hard-target-shard") => {
+            let limit = parse_composition_hard_target_limit(args);
+            print!(
+                "{}",
+                dataset_label::composition_hard_target_shard_jsonl(limit)
+                    .expect("composition hard-target shard must serialize")
+            );
+            return;
+        }
         Some(arg) => {
             eprintln!("unsupported argument: {arg}");
             std::process::exit(2);
@@ -73,8 +82,33 @@ Commands:\n\
   --frontier-label-shard [--limit N]\n\
   --family-frontier-label-shard [--limit-per-family N]\n\
   --expanded-family-frontier-label-shard [--limit-per-family N]\n\
+  --composition-hard-target-shard [--limit N]\n\
   --help\n"
     );
+}
+
+fn parse_composition_hard_target_limit(mut args: impl Iterator<Item = String>) -> usize {
+    match args.next().as_deref() {
+        None => dataset_label::DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT,
+        Some("--limit") => {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("--limit requires a positive integer");
+                std::process::exit(2);
+            });
+            if let Some(extra) = args.next() {
+                eprintln!("unsupported argument for --composition-hard-target-shard: {extra}");
+                std::process::exit(2);
+            }
+            value.parse::<usize>().unwrap_or_else(|error| {
+                eprintln!("invalid --limit: {error}");
+                std::process::exit(2);
+            })
+        }
+        Some(arg) => {
+            eprintln!("unsupported argument for --composition-hard-target-shard: {arg}");
+            std::process::exit(2);
+        }
+    }
 }
 
 fn parse_family_frontier_limit(mut args: impl Iterator<Item = String>) -> usize {
