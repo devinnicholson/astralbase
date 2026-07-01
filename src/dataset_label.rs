@@ -18,7 +18,7 @@ pub const FORMAL_CGT_DOMAIN_DEFINITION: &str = "thermograph:golden_values#hot_on
 pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
-pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 4;
+pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 17;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -27,6 +27,10 @@ pub const COMPOSITION_FIXTURE_MISSING_COMPONENT_FEN: &str =
     "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 2";
 pub const COMPOSITION_FIXTURE_STALE_COMPOSITION_FEN: &str =
     "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 3";
+pub const COMPOSITION_FIXTURE_DUPLICATE_ROOT_FEN: &str =
+    "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 4";
+pub const COMPOSITION_FIXTURE_UNSUPPORTED_VALUE_FEN: &str =
+    "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 5";
 const COMMON_REQUIRED_FIELDS: [&str; 5] = [
     "schema_version",
     "row_id",
@@ -650,24 +654,33 @@ pub fn expanded_family_frontier_audited_shard(limit_per_family: usize) -> Vec<Da
 
 #[must_use]
 pub fn composition_hard_target_shard(limit: usize) -> Vec<DatasetLabelRow> {
-    let mut rows = vec![
-        composition_fixture_exact_row("astralbase-w17-composition-exact-wall-001"),
-        composition_fixture_rejected_row(
-            "astralbase-w17-composition-rejected-weak-decomposition-001",
-            "8/8/8/8/8/8/8/4K2k w - - 0 1",
-            "weak_decomposition: no strict decomposition certificate is available",
-        ),
-        composition_fixture_rejected_row(
-            "astralbase-w17-composition-rejected-missing-component-value-001",
-            COMPOSITION_FIXTURE_MISSING_COMPONENT_FEN,
-            "missing_component_value_digest: every strict component root needs a verified value digest",
-        ),
-        composition_fixture_rejected_row(
-            "astralbase-w17-composition-rejected-stale-composition-001",
-            COMPOSITION_FIXTURE_STALE_COMPOSITION_FEN,
-            "stale_composition_digest: BMCOMPOSE digest does not match the referenced decomposition and component values",
-        ),
-    ];
+    let mut rows = Vec::with_capacity(DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT);
+
+    if let Some(first_exact) = COMPOSITION_FIXTURE_EXACT_SPECS.first() {
+        rows.push(composition_fixture_exact_row(first_exact));
+    }
+    rows.extend(
+        COMPOSITION_FIXTURE_REJECTED_CONTROLS
+            .iter()
+            .take(3)
+            .map(|control| {
+                composition_fixture_rejected_row(control.row_id, control.fen, control.reason)
+            }),
+    );
+    rows.extend(
+        COMPOSITION_FIXTURE_EXACT_SPECS
+            .iter()
+            .skip(1)
+            .map(composition_fixture_exact_row),
+    );
+    rows.extend(
+        COMPOSITION_FIXTURE_REJECTED_CONTROLS
+            .iter()
+            .skip(3)
+            .map(|control| {
+                composition_fixture_rejected_row(control.row_id, control.fen, control.reason)
+            }),
+    );
     rows.truncate(limit);
     rows
 }
@@ -805,6 +818,163 @@ struct SampleLabelCandidate {
     fen: &'static str,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct CompositionFixtureSpec {
+    row_id: &'static str,
+    bottom_square: Square,
+    bottom_piece: char,
+    top_square: Square,
+    top_piece: char,
+    value_offset: i32,
+    fullmove_number: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CompositionFixtureRejectedControl {
+    row_id: &'static str,
+    fen: &'static str,
+    reason: &'static str,
+}
+
+const COMPOSITION_FIXTURE_EXACT_SPECS: [CompositionFixtureSpec; 12] = [
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-001",
+        bottom_square: Square::A1,
+        bottom_piece: 'N',
+        top_square: Square::H8,
+        top_piece: 'n',
+        value_offset: 0,
+        fullmove_number: 1,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-002",
+        bottom_square: Square::B1,
+        bottom_piece: 'B',
+        top_square: Square::G8,
+        top_piece: 'r',
+        value_offset: 2,
+        fullmove_number: 2,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-003",
+        bottom_square: Square::C1,
+        bottom_piece: 'R',
+        top_square: Square::F8,
+        top_piece: 'b',
+        value_offset: 4,
+        fullmove_number: 3,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-004",
+        bottom_square: Square::D1,
+        bottom_piece: 'Q',
+        top_square: Square::E8,
+        top_piece: 'q',
+        value_offset: 6,
+        fullmove_number: 4,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-005",
+        bottom_square: Square::A2,
+        bottom_piece: 'N',
+        top_square: Square::H7,
+        top_piece: 'n',
+        value_offset: 8,
+        fullmove_number: 5,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-006",
+        bottom_square: Square::B2,
+        bottom_piece: 'B',
+        top_square: Square::G7,
+        top_piece: 'r',
+        value_offset: 10,
+        fullmove_number: 6,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-007",
+        bottom_square: Square::C2,
+        bottom_piece: 'R',
+        top_square: Square::F7,
+        top_piece: 'b',
+        value_offset: 12,
+        fullmove_number: 7,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-008",
+        bottom_square: Square::D2,
+        bottom_piece: 'Q',
+        top_square: Square::E7,
+        top_piece: 'q',
+        value_offset: 14,
+        fullmove_number: 8,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-009",
+        bottom_square: Square::A3,
+        bottom_piece: 'N',
+        top_square: Square::H6,
+        top_piece: 'n',
+        value_offset: 16,
+        fullmove_number: 9,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-010",
+        bottom_square: Square::B3,
+        bottom_piece: 'B',
+        top_square: Square::G6,
+        top_piece: 'r',
+        value_offset: 18,
+        fullmove_number: 10,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-011",
+        bottom_square: Square::C3,
+        bottom_piece: 'R',
+        top_square: Square::F6,
+        top_piece: 'b',
+        value_offset: 20,
+        fullmove_number: 11,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-012",
+        bottom_square: Square::D3,
+        bottom_piece: 'Q',
+        top_square: Square::E6,
+        top_piece: 'q',
+        value_offset: 22,
+        fullmove_number: 12,
+    },
+];
+
+const COMPOSITION_FIXTURE_REJECTED_CONTROLS: [CompositionFixtureRejectedControl; 5] = [
+    CompositionFixtureRejectedControl {
+        row_id: "astralbase-w17-composition-rejected-weak-decomposition-001",
+        fen: "8/8/8/8/8/8/8/4K2k w - - 0 1",
+        reason: "weak_decomposition: no strict decomposition certificate is available",
+    },
+    CompositionFixtureRejectedControl {
+        row_id: "astralbase-w17-composition-rejected-missing-component-value-001",
+        fen: COMPOSITION_FIXTURE_MISSING_COMPONENT_FEN,
+        reason: "missing_component_value_digest: every strict component root needs a verified value digest",
+    },
+    CompositionFixtureRejectedControl {
+        row_id: "astralbase-w17-composition-rejected-stale-composition-001",
+        fen: COMPOSITION_FIXTURE_STALE_COMPOSITION_FEN,
+        reason: "stale_composition_digest: BMCOMPOSE digest does not match the referenced decomposition and component values",
+    },
+    CompositionFixtureRejectedControl {
+        row_id: "astralbase-w17-composition-rejected-duplicate-root-001",
+        fen: COMPOSITION_FIXTURE_DUPLICATE_ROOT_FEN,
+        reason: "duplicate_component_root: component roots must be unique and match strict decomposition coverage",
+    },
+    CompositionFixtureRejectedControl {
+        row_id: "astralbase-w17-composition-rejected-unsupported-value-001",
+        fen: COMPOSITION_FIXTURE_UNSUPPORTED_VALUE_FEN,
+        reason: "unsupported_composition_value: approximate or unsupported values cannot produce exact BMCOMPOSE labels",
+    },
+];
+
 impl SampleLabelCandidate {
     fn to_row(self) -> DatasetLabelRow {
         match domain::validate_first_constrained_fen(self.fen) {
@@ -888,8 +1058,8 @@ fn exact_row(
         .map(|tactic| immediate_tactic_exact_row(row_id, validated, tactic, context))
 }
 
-fn composition_fixture_exact_row(row_id: &str) -> DatasetLabelRow {
-    let board = composition_fixture_board();
+fn composition_fixture_exact_row(spec: &CompositionFixtureSpec) -> DatasetLabelRow {
+    let board = composition_fixture_board(spec);
     let decomposition = bitmesh::certify_decomposition(&board);
     assert_eq!(
         decomposition.status,
@@ -912,8 +1082,8 @@ fn composition_fixture_exact_row(row_id: &str) -> DatasetLabelRow {
     let mut component_value_summaries = Vec::new();
     let mut result_integer = 0;
     for (index, component_root) in component_roots.iter().enumerate() {
-        let component_integer =
-            i32::try_from(index + 1).expect("composition fixture component index fits i32");
+        let component_integer = spec.value_offset
+            + i32::try_from(index + 1).expect("composition fixture component index fits i32");
         result_integer += component_integer;
         let payload = CGTValue::Integer(component_integer).exact_value_payload();
         component_values.insert(component_root.to_string(), payload.digest.clone());
@@ -966,11 +1136,15 @@ fn composition_fixture_exact_row(row_id: &str) -> DatasetLabelRow {
         "component_values".to_owned(),
         component_value_summaries.join(","),
     );
+    exact.value.insert(
+        "component_value_offset".to_owned(),
+        spec.value_offset.to_string(),
+    );
 
     DatasetLabelRow::exact(
-        row_id,
+        spec.row_id,
         COMPOSITION_FIXTURE_DOMAIN_ID,
-        DatasetPosition::fen(COMPOSITION_FIXTURE_LOCKED_WALL_FEN),
+        DatasetPosition::fen(composition_fixture_fen(spec)),
         exact,
         ExactProvenance {
             code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
@@ -996,7 +1170,7 @@ fn composition_fixture_exact_row(row_id: &str) -> DatasetLabelRow {
     )
 }
 
-fn composition_fixture_board() -> Board {
+fn composition_fixture_board(spec: &CompositionFixtureSpec) -> Board {
     let mut board = Board::empty();
 
     for sq in [
@@ -1020,9 +1194,58 @@ fn composition_fixture_board() -> Board {
         board.set_piece_at(sq, Color::White.pawn());
     }
 
-    board.set_piece_at(Square::A1, Color::White.knight());
-    board.set_piece_at(Square::H8, Color::Black.knight());
+    board.set_piece_at(
+        spec.bottom_square,
+        composition_fixture_piece(spec.bottom_piece),
+    );
+    board.set_piece_at(spec.top_square, composition_fixture_piece(spec.top_piece));
     board
+}
+
+fn composition_fixture_fen(spec: &CompositionFixtureSpec) -> String {
+    let board = board_fen(&composition_fixture_fen_pieces(spec));
+    format!("{board} w - - 0 {}", spec.fullmove_number)
+}
+
+fn composition_fixture_fen_pieces(spec: &CompositionFixtureSpec) -> Vec<(usize, char)> {
+    let mut pieces = Vec::with_capacity(18);
+    for square in [
+        Square::A4,
+        Square::B4,
+        Square::C4,
+        Square::D4,
+        Square::E4,
+        Square::F4,
+        Square::G4,
+        Square::H4,
+        Square::A5,
+        Square::B5,
+        Square::C5,
+        Square::D5,
+        Square::E5,
+        Square::F5,
+        Square::G5,
+        Square::H5,
+    ] {
+        pieces.push((usize::from(square), 'P'));
+    }
+    pieces.push((usize::from(spec.bottom_square), spec.bottom_piece));
+    pieces.push((usize::from(spec.top_square), spec.top_piece));
+    pieces
+}
+
+fn composition_fixture_piece(piece: char) -> shakmaty::Piece {
+    match piece {
+        'B' => Color::White.bishop(),
+        'N' => Color::White.knight(),
+        'Q' => Color::White.queen(),
+        'R' => Color::White.rook(),
+        'b' => Color::Black.bishop(),
+        'n' => Color::Black.knight(),
+        'q' => Color::Black.queen(),
+        'r' => Color::Black.rook(),
+        _ => panic!("unsupported composition fixture piece: {piece}"),
+    }
 }
 
 fn composition_fixture_rejected_row(row_id: &str, fen: &str, reason: &str) -> DatasetLabelRow {
@@ -1694,6 +1917,18 @@ mod tests {
         let rows = composition_hard_target_shard(DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT);
         assert_eq!(rows.len(), DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT);
         assert_eq!(rows[0].label_kind(), LabelKind::Exact);
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.label_kind() == LabelKind::Exact)
+                .count(),
+            COMPOSITION_FIXTURE_EXACT_SPECS.len()
+        );
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.label_kind() == LabelKind::Rejected)
+                .count(),
+            COMPOSITION_FIXTURE_REJECTED_CONTROLS.len()
+        );
         assert!(
             rows.iter()
                 .any(|row| matches!(row.label, LabelPayload::Rejected { .. }))
@@ -1709,6 +1944,58 @@ mod tests {
             composition_hard_target_shard_jsonl(DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT)
                 .unwrap()
         );
+    }
+
+    #[test]
+    fn composition_hard_target_limit_four_keeps_original_smoke_shape() {
+        let rows = composition_hard_target_shard(4);
+
+        assert_eq!(rows.len(), 4);
+        assert_eq!(rows[0].row_id, "astralbase-w17-composition-exact-wall-001");
+        assert_eq!(rows[0].label_kind(), LabelKind::Exact);
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.label_kind() == LabelKind::Rejected)
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    fn composition_hard_target_exact_fixtures_are_distinct() {
+        let rows = composition_hard_target_shard(DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT);
+        let exact_rows = rows
+            .iter()
+            .filter(|row| row.label_kind() == LabelKind::Exact)
+            .collect::<Vec<_>>();
+        let mut positions = std::collections::BTreeSet::new();
+        let mut result_digests = std::collections::BTreeSet::new();
+        let mut decomposition_digests = std::collections::BTreeSet::new();
+        let mut composition_digests = std::collections::BTreeSet::new();
+
+        assert_eq!(exact_rows.len(), COMPOSITION_FIXTURE_EXACT_SPECS.len());
+        for row in exact_rows {
+            assert!(positions.insert(row.position.text.as_str()));
+            let LabelPayload::Exact { exact, provenance } = &row.label else {
+                unreachable!("filtered exact rows only");
+            };
+            let composition = provenance
+                .certificate
+                .composition
+                .as_deref()
+                .expect("composition exact row must carry structured certificate fields");
+            assert!(
+                result_digests.insert(
+                    exact
+                        .value
+                        .get("digest")
+                        .expect("exact result digest is present")
+                        .as_str()
+                )
+            );
+            assert!(decomposition_digests.insert(composition.decomposition_digest.as_str()));
+            assert!(composition_digests.insert(composition.composition_digest.as_str()));
+        }
     }
 
     #[test]
