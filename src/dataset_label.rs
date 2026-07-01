@@ -18,7 +18,7 @@ pub const FORMAL_CGT_DOMAIN_DEFINITION: &str = "thermograph:golden_values#hot_on
 pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
-pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 17;
+pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -821,12 +821,14 @@ struct SampleLabelCandidate {
 #[derive(Clone, Copy, Debug)]
 struct CompositionFixtureSpec {
     row_id: &'static str,
+    topology: CompositionFixtureTopology,
     bottom_square: Square,
     bottom_piece: char,
     top_square: Square,
     top_piece: char,
     value_offset: i32,
     fullmove_number: u32,
+    expected_component_count: usize,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -836,114 +838,188 @@ struct CompositionFixtureRejectedControl {
     reason: &'static str,
 }
 
-const COMPOSITION_FIXTURE_EXACT_SPECS: [CompositionFixtureSpec; 12] = [
+#[derive(Clone, Copy, Debug)]
+enum CompositionFixtureTopology {
+    SingleHorizontalWall,
+    DoubleHorizontalWall,
+}
+
+const COMPOSITION_FIXTURE_EXACT_SPECS: [CompositionFixtureSpec; 16] = [
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-001",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::A1,
         bottom_piece: 'N',
         top_square: Square::H8,
         top_piece: 'n',
         value_offset: 0,
         fullmove_number: 1,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-002",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::B1,
         bottom_piece: 'B',
         top_square: Square::G8,
         top_piece: 'r',
         value_offset: 2,
         fullmove_number: 2,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-003",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::C1,
         bottom_piece: 'R',
         top_square: Square::F8,
         top_piece: 'b',
         value_offset: 4,
         fullmove_number: 3,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-004",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::D1,
         bottom_piece: 'Q',
         top_square: Square::E8,
         top_piece: 'q',
         value_offset: 6,
         fullmove_number: 4,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-005",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::A2,
         bottom_piece: 'N',
         top_square: Square::H7,
         top_piece: 'n',
         value_offset: 8,
         fullmove_number: 5,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-006",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::B2,
         bottom_piece: 'B',
         top_square: Square::G7,
         top_piece: 'r',
         value_offset: 10,
         fullmove_number: 6,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-007",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::C2,
         bottom_piece: 'R',
         top_square: Square::F7,
         top_piece: 'b',
         value_offset: 12,
         fullmove_number: 7,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-008",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::D2,
         bottom_piece: 'Q',
         top_square: Square::E7,
         top_piece: 'q',
         value_offset: 14,
         fullmove_number: 8,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-009",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::A3,
         bottom_piece: 'N',
         top_square: Square::H6,
         top_piece: 'n',
         value_offset: 16,
         fullmove_number: 9,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-010",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::B3,
         bottom_piece: 'B',
         top_square: Square::G6,
         top_piece: 'r',
         value_offset: 18,
         fullmove_number: 10,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-011",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::C3,
         bottom_piece: 'R',
         top_square: Square::F6,
         top_piece: 'b',
         value_offset: 20,
         fullmove_number: 11,
+        expected_component_count: 2,
     },
     CompositionFixtureSpec {
         row_id: "astralbase-w17-composition-exact-wall-012",
+        topology: CompositionFixtureTopology::SingleHorizontalWall,
         bottom_square: Square::D3,
         bottom_piece: 'Q',
         top_square: Square::E6,
         top_piece: 'q',
         value_offset: 22,
         fullmove_number: 12,
+        expected_component_count: 2,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-013",
+        topology: CompositionFixtureTopology::DoubleHorizontalWall,
+        bottom_square: Square::A1,
+        bottom_piece: 'N',
+        top_square: Square::H8,
+        top_piece: 'n',
+        value_offset: 24,
+        fullmove_number: 13,
+        expected_component_count: 3,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-014",
+        topology: CompositionFixtureTopology::DoubleHorizontalWall,
+        bottom_square: Square::B1,
+        bottom_piece: 'B',
+        top_square: Square::G8,
+        top_piece: 'r',
+        value_offset: 27,
+        fullmove_number: 14,
+        expected_component_count: 3,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-015",
+        topology: CompositionFixtureTopology::DoubleHorizontalWall,
+        bottom_square: Square::C1,
+        bottom_piece: 'R',
+        top_square: Square::F8,
+        top_piece: 'b',
+        value_offset: 30,
+        fullmove_number: 15,
+        expected_component_count: 3,
+    },
+    CompositionFixtureSpec {
+        row_id: "astralbase-w17-composition-exact-wall-016",
+        topology: CompositionFixtureTopology::DoubleHorizontalWall,
+        bottom_square: Square::D1,
+        bottom_piece: 'Q',
+        top_square: Square::E8,
+        top_piece: 'q',
+        value_offset: 33,
+        fullmove_number: 16,
+        expected_component_count: 3,
     },
 ];
 
@@ -1066,6 +1142,11 @@ fn composition_fixture_exact_row(spec: &CompositionFixtureSpec) -> DatasetLabelR
         DecompositionStatus::Strict,
         "composition fixture must have a strict decomposition certificate",
     );
+    assert_eq!(
+        decomposition.components.len(),
+        spec.expected_component_count,
+        "composition fixture emitted an unexpected component count",
+    );
     let decomposition_digest = decomposition
         .digest()
         .expect("composition fixture decomposition must digest");
@@ -1173,25 +1254,8 @@ fn composition_fixture_exact_row(spec: &CompositionFixtureSpec) -> DatasetLabelR
 fn composition_fixture_board(spec: &CompositionFixtureSpec) -> Board {
     let mut board = Board::empty();
 
-    for sq in [
-        Square::A4,
-        Square::B4,
-        Square::C4,
-        Square::D4,
-        Square::E4,
-        Square::F4,
-        Square::G4,
-        Square::H4,
-        Square::A5,
-        Square::B5,
-        Square::C5,
-        Square::D5,
-        Square::E5,
-        Square::F5,
-        Square::G5,
-        Square::H5,
-    ] {
-        board.set_piece_at(sq, Color::White.pawn());
+    for (square, piece) in composition_fixture_wall_pieces(spec.topology) {
+        board.set_piece_at(square, composition_fixture_piece(piece));
     }
 
     board.set_piece_at(
@@ -1209,28 +1273,82 @@ fn composition_fixture_fen(spec: &CompositionFixtureSpec) -> String {
 
 fn composition_fixture_fen_pieces(spec: &CompositionFixtureSpec) -> Vec<(usize, char)> {
     let mut pieces = Vec::with_capacity(18);
-    for square in [
-        Square::A4,
-        Square::B4,
-        Square::C4,
-        Square::D4,
-        Square::E4,
-        Square::F4,
-        Square::G4,
-        Square::H4,
-        Square::A5,
-        Square::B5,
-        Square::C5,
-        Square::D5,
-        Square::E5,
-        Square::F5,
-        Square::G5,
-        Square::H5,
-    ] {
-        pieces.push((usize::from(square), 'P'));
+    for (square, piece) in composition_fixture_wall_pieces(spec.topology) {
+        pieces.push((usize::from(square), piece));
     }
     pieces.push((usize::from(spec.bottom_square), spec.bottom_piece));
     pieces.push((usize::from(spec.top_square), spec.top_piece));
+    pieces
+}
+
+fn composition_fixture_wall_pieces(topology: CompositionFixtureTopology) -> Vec<(Square, char)> {
+    let mut pieces = Vec::new();
+    match topology {
+        CompositionFixtureTopology::SingleHorizontalWall => {
+            for square in [
+                Square::A4,
+                Square::B4,
+                Square::C4,
+                Square::D4,
+                Square::E4,
+                Square::F4,
+                Square::G4,
+                Square::H4,
+                Square::A5,
+                Square::B5,
+                Square::C5,
+                Square::D5,
+                Square::E5,
+                Square::F5,
+                Square::G5,
+                Square::H5,
+            ] {
+                pieces.push((square, 'P'));
+            }
+        }
+        CompositionFixtureTopology::DoubleHorizontalWall => {
+            for square in [
+                Square::A2,
+                Square::B2,
+                Square::C2,
+                Square::D2,
+                Square::E2,
+                Square::F2,
+                Square::G2,
+                Square::H2,
+                Square::A3,
+                Square::B3,
+                Square::C3,
+                Square::D3,
+                Square::E3,
+                Square::F3,
+                Square::G3,
+                Square::H3,
+            ] {
+                pieces.push((square, 'P'));
+            }
+            for square in [
+                Square::A4,
+                Square::B4,
+                Square::C4,
+                Square::D4,
+                Square::E4,
+                Square::F4,
+                Square::G4,
+                Square::H4,
+                Square::A5,
+                Square::B5,
+                Square::C5,
+                Square::D5,
+                Square::E5,
+                Square::F5,
+                Square::G5,
+                Square::H5,
+            ] {
+                pieces.push((square, 'p'));
+            }
+        }
+    }
     pieces
 }
 
@@ -1238,10 +1356,12 @@ fn composition_fixture_piece(piece: char) -> shakmaty::Piece {
     match piece {
         'B' => Color::White.bishop(),
         'N' => Color::White.knight(),
+        'P' => Color::White.pawn(),
         'Q' => Color::White.queen(),
         'R' => Color::White.rook(),
         'b' => Color::Black.bishop(),
         'n' => Color::Black.knight(),
+        'p' => Color::Black.pawn(),
         'q' => Color::Black.queen(),
         'r' => Color::Black.rook(),
         _ => panic!("unsupported composition fixture piece: {piece}"),
@@ -1972,6 +2092,7 @@ mod tests {
         let mut result_digests = std::collections::BTreeSet::new();
         let mut decomposition_digests = std::collections::BTreeSet::new();
         let mut composition_digests = std::collections::BTreeSet::new();
+        let mut component_counts = std::collections::BTreeSet::new();
 
         assert_eq!(exact_rows.len(), COMPOSITION_FIXTURE_EXACT_SPECS.len());
         for row in exact_rows {
@@ -1984,6 +2105,13 @@ mod tests {
                 .composition
                 .as_deref()
                 .expect("composition exact row must carry structured certificate fields");
+            component_counts.insert(
+                exact
+                    .value
+                    .get("component_count")
+                    .expect("exact component count is present")
+                    .as_str(),
+            );
             assert!(
                 result_digests.insert(
                     exact
@@ -1996,6 +2124,10 @@ mod tests {
             assert!(decomposition_digests.insert(composition.decomposition_digest.as_str()));
             assert!(composition_digests.insert(composition.composition_digest.as_str()));
         }
+        assert_eq!(
+            component_counts,
+            std::collections::BTreeSet::from(["2", "3"])
+        );
     }
 
     #[test]
