@@ -19,7 +19,7 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
-pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 6;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 7;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -936,6 +936,47 @@ struct NonFixtureComposedBoardSpec {
     row_id: &'static str,
     active_pieces: &'static [(Square, char)],
     fullmove_number: u32,
+    value_rule: NonFixtureComposedBoardValueRule,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NonFixtureComposedBoardValueRule {
+    MaterialBalanceSum,
+    AgencyAtomSum,
+}
+
+impl NonFixtureComposedBoardValueRule {
+    fn solver_scope(self) -> &'static str {
+        match self {
+            Self::MaterialBalanceSum => "composition_board_material_components",
+            Self::AgencyAtomSum => "composition_board_agency_atoms",
+        }
+    }
+
+    fn composition_value_rule(self) -> &'static str {
+        match self {
+            Self::MaterialBalanceSum => "component_material_balance_sum_v0",
+            Self::AgencyAtomSum => "component_agency_atom_sum_v0",
+        }
+    }
+
+    fn verifier(self) -> &'static str {
+        match self {
+            Self::MaterialBalanceSum => "bitmesh_conservative_board_material_bmcompose_verifier",
+            Self::AgencyAtomSum => "bitmesh_conservative_board_agency_atom_bmcompose_verifier",
+        }
+    }
+
+    fn certificate_kind(self) -> &'static str {
+        match self {
+            Self::MaterialBalanceSum => {
+                "bitmesh-bmcompose-v1+thermograph-exact-value+board-material-v0"
+            }
+            Self::AgencyAtomSum => {
+                "bitmesh-bmcompose-v1+thermograph-exact-value+board-agency-atom-v0"
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1163,11 +1204,12 @@ const NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES: [NonFixtureComposedDomainCandidate
     },
 ];
 
-const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 3] = [
+const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 4] = [
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-001",
         active_pieces: &[(Square::A1, 'N'), (Square::H8, 'n'), (Square::G7, 'p')],
         fullmove_number: 101,
+        value_rule: NonFixtureComposedBoardValueRule::MaterialBalanceSum,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-002",
@@ -1179,11 +1221,19 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 3] =
             (Square::G7, 'p'),
         ],
         fullmove_number: 102,
+        value_rule: NonFixtureComposedBoardValueRule::MaterialBalanceSum,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-003",
         active_pieces: &[(Square::A2, 'n'), (Square::H7, 'N'), (Square::G6, 'P')],
         fullmove_number: 103,
+        value_rule: NonFixtureComposedBoardValueRule::MaterialBalanceSum,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-004",
+        active_pieces: &[(Square::A1, 'N'), (Square::A2, 'P'), (Square::H8, 'n')],
+        fullmove_number: 104,
+        value_rule: NonFixtureComposedBoardValueRule::AgencyAtomSum,
     },
 ];
 
@@ -1520,22 +1570,30 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
 
     let mut component_values = BTreeMap::new();
     let mut bmcompose_component_values = Vec::new();
+    let mut component_root_summaries = Vec::new();
     let mut component_value_summaries = Vec::new();
+    let mut component_value_class_summaries = Vec::new();
     let mut component_material_summaries = Vec::new();
     let mut component_cgt_values = Vec::new();
 
     for component in components {
         let material_value = component_material_balance(&board, component.active_mask);
-        let component_value = CGTValue::Integer(material_value);
+        let component_value = component_cgt_value(spec.value_rule, material_value);
         let payload = component_value.exact_value_payload();
         component_values.insert(component.root.to_string(), payload.digest.clone());
         bmcompose_component_values.push(CompositionComponentValue {
             component_root: component.root,
             value_digest: payload.digest.clone(),
         });
+        component_root_summaries.push(component.root.to_string());
         component_value_summaries.push(format!(
             "{}={}",
             component.root, payload.canonical_serialization
+        ));
+        component_value_class_summaries.push(format!(
+            "{}={}",
+            component.root,
+            payload.value_class.as_str()
         ));
         component_material_summaries.push(format!("{}={material_value}", component.root));
         component_cgt_values.push(component_value);
@@ -1559,11 +1617,11 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
     let mut exact = ExactLabel::from_thermograph_payload(&result_payload);
     exact.value.insert(
         "solver_scope".to_owned(),
-        "composition_board_material_components".to_owned(),
+        spec.value_rule.solver_scope().to_owned(),
     );
     exact.value.insert(
         "composition_value_rule".to_owned(),
-        "component_material_balance_sum_v0".to_owned(),
+        spec.value_rule.composition_value_rule().to_owned(),
     );
     exact
         .value
@@ -1574,15 +1632,15 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
     );
     exact.value.insert(
         "component_roots".to_owned(),
-        component_values
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>()
-            .join(","),
+        component_root_summaries.join(","),
     );
     exact.value.insert(
         "component_values".to_owned(),
         component_value_summaries.join(","),
+    );
+    exact.value.insert(
+        "component_value_classes".to_owned(),
+        component_value_class_summaries.join(","),
     );
     exact.value.insert(
         "component_material_balances".to_owned(),
@@ -1609,14 +1667,15 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
             domain_definition: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG
                 .domain_definition
                 .to_owned(),
-            verifier: "bitmesh_conservative_board_material_bmcompose_verifier".to_owned(),
+            verifier: spec.value_rule.verifier().to_owned(),
             verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
             certificate: LabelCertificate::composition(
-                "bitmesh-bmcompose-v1+thermograph-exact-value+board-material-v0",
+                spec.value_rule.certificate_kind(),
                 format!(
-                    "bitmesh:{};proof:{};bmcompose:{};thermograph:{}",
+                    "bitmesh:{};proof:{};rule:{};bmcompose:{};thermograph:{}",
                     decomposition_digest,
                     proof.proof_kind,
+                    spec.value_rule.composition_value_rule(),
                     composition_digest,
                     result_payload.digest
                 ),
@@ -1678,6 +1737,26 @@ fn component_material_balance(board: &Board, active_mask: shakmaty::Bitboard) ->
             sign * material_value(piece.role)
         })
         .sum()
+}
+
+fn component_cgt_value(
+    value_rule: NonFixtureComposedBoardValueRule,
+    material_balance: i32,
+) -> CGTValue {
+    match value_rule {
+        NonFixtureComposedBoardValueRule::MaterialBalanceSum => CGTValue::Integer(material_balance),
+        NonFixtureComposedBoardValueRule::AgencyAtomSum => {
+            component_agency_atom_value(material_balance)
+        }
+    }
+}
+
+fn component_agency_atom_value(material_balance: i32) -> CGTValue {
+    match material_balance.cmp(&0) {
+        std::cmp::Ordering::Greater => CGTValue::Up,
+        std::cmp::Ordering::Equal => CGTValue::Star,
+        std::cmp::Ordering::Less => CGTValue::Down,
+    }
 }
 
 fn material_value(role: shakmaty::Role) -> i32 {
@@ -2608,31 +2687,52 @@ mod tests {
             match &non_fixture_row.label {
                 LabelPayload::Exact { exact, provenance } => {
                     assert_eq!(non_fixture_row.domain, NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID);
-                    assert_eq!(
-                        exact.value.get("solver_scope").map(String::as_str),
-                        Some("composition_board_material_components")
-                    );
-                    assert_eq!(
-                        exact
-                            .value
-                            .get("composition_value_rule")
-                            .map(String::as_str),
+                    let composition_value_rule = exact
+                        .value
+                        .get("composition_value_rule")
+                        .map(String::as_str);
+                    assert!(matches!(
+                        composition_value_rule,
                         Some("component_material_balance_sum_v0")
-                    );
+                            | Some("component_agency_atom_sum_v0")
+                    ));
                     assert_ne!(
-                        exact
-                            .value
-                            .get("composition_value_rule")
-                            .map(String::as_str),
+                        composition_value_rule,
                         Some("component_index_integer_sum_fixture_v0")
                     );
+                    match composition_value_rule {
+                        Some("component_material_balance_sum_v0") => {
+                            assert_eq!(
+                                exact.value.get("solver_scope").map(String::as_str),
+                                Some("composition_board_material_components")
+                            );
+                            assert_eq!(
+                                provenance.verifier,
+                                "bitmesh_conservative_board_material_bmcompose_verifier"
+                            );
+                        }
+                        Some("component_agency_atom_sum_v0") => {
+                            assert_eq!(
+                                exact.value.get("solver_scope").map(String::as_str),
+                                Some("composition_board_agency_atoms")
+                            );
+                            assert_eq!(exact.value_class, ExactValueClass::GameTree);
+                            let component_value_classes = exact
+                                .value
+                                .get("component_value_classes")
+                                .expect("agency atom row records component value classes");
+                            assert!(component_value_classes.contains("=up"));
+                            assert!(component_value_classes.contains("=down"));
+                            assert_eq!(
+                                provenance.verifier,
+                                "bitmesh_conservative_board_agency_atom_bmcompose_verifier"
+                            );
+                        }
+                        _ => unreachable!("validated composition value rule"),
+                    }
                     assert_eq!(
                         exact.value.get("proof_kind").map(String::as_str),
                         Some("bitmesh:conservative_legal_independence:v0")
-                    );
-                    assert_eq!(
-                        provenance.verifier,
-                        "bitmesh_conservative_board_material_bmcompose_verifier"
                     );
                     assert!(provenance.certificate.composition.as_ref().is_some_and(
                         |composition| {

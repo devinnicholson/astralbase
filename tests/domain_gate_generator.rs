@@ -73,7 +73,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     && row.label_kind() == LabelKind::Exact
             )
             .count(),
-        3
+        4
     );
     assert_eq!(
         rows.iter()
@@ -84,6 +84,23 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
             .count(),
         3
     );
+    assert_eq!(
+        rows.iter()
+            .filter(|row| {
+                matches!(
+                    &row.label,
+                    LabelPayload::Exact { exact, .. }
+                        if exact
+                            .value
+                            .get("composition_value_rule")
+                            .map(String::as_str)
+                            == Some("component_agency_atom_sum_v0")
+                            && exact.value_class == dataset_label::ExactValueClass::GameTree
+                )
+            })
+            .count(),
+        1
+    );
 
     for row in rows {
         match row.label {
@@ -92,13 +109,24 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     row.domain,
                     dataset_label::NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID
                 );
-                assert_eq!(
-                    exact
-                        .value
-                        .get("composition_value_rule")
-                        .map(String::as_str),
+                let composition_value_rule = exact
+                    .value
+                    .get("composition_value_rule")
+                    .map(String::as_str);
+                assert!(matches!(
+                    composition_value_rule,
                     Some("component_material_balance_sum_v0")
-                );
+                        | Some("component_agency_atom_sum_v0")
+                ));
+                if composition_value_rule == Some("component_agency_atom_sum_v0") {
+                    assert_eq!(exact.value_class, dataset_label::ExactValueClass::GameTree);
+                    let component_value_classes = exact
+                        .value
+                        .get("component_value_classes")
+                        .expect("agency atom row records component value classes");
+                    assert!(component_value_classes.contains("=up"));
+                    assert!(component_value_classes.contains("=down"));
+                }
                 assert_eq!(
                     exact.value.get("proof_kind").map(String::as_str),
                     Some("bitmesh:conservative_legal_independence:v0")
