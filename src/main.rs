@@ -53,6 +53,15 @@ fn main() {
             );
             return;
         }
+        Some("--non-fixture-composed-domain-shard") => {
+            let limit = parse_non_fixture_composed_domain_limit(args);
+            print!(
+                "{}",
+                dataset_label::non_fixture_composed_domain_shard_jsonl(limit)
+                    .expect("non-fixture composed-domain shard must serialize")
+            );
+            return;
+        }
         Some(arg) => {
             eprintln!("unsupported argument: {arg}");
             std::process::exit(2);
@@ -83,8 +92,33 @@ Commands:\n\
   --family-frontier-label-shard [--limit-per-family N]\n\
   --expanded-family-frontier-label-shard [--limit-per-family N]\n\
   --composition-hard-target-shard [--limit N]\n\
+  --non-fixture-composed-domain-shard [--limit N]\n\
   --help\n"
     );
+}
+
+fn parse_non_fixture_composed_domain_limit(mut args: impl Iterator<Item = String>) -> usize {
+    match args.next().as_deref() {
+        None => dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT,
+        Some("--limit") => {
+            let value = args.next().unwrap_or_else(|| {
+                eprintln!("--limit requires a positive integer");
+                std::process::exit(2);
+            });
+            if let Some(extra) = args.next() {
+                eprintln!("unsupported argument for --non-fixture-composed-domain-shard: {extra}");
+                std::process::exit(2);
+            }
+            value.parse::<usize>().unwrap_or_else(|error| {
+                eprintln!("invalid --limit: {error}");
+                std::process::exit(2);
+            })
+        }
+        Some(arg) => {
+            eprintln!("unsupported argument for --non-fixture-composed-domain-shard: {arg}");
+            std::process::exit(2);
+        }
+    }
 }
 
 fn parse_composition_hard_target_limit(mut args: impl Iterator<Item = String>) -> usize {

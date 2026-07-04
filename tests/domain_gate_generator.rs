@@ -1,5 +1,5 @@
 use astralbase::{
-    dataset_label::{self, LabelKind, LabelPayload},
+    dataset_label::{self, LabelKind, LabelPayload, RejectedStatus},
     domain::{self, DomainRejectionCode, TerminalStatus},
 };
 
@@ -42,5 +42,42 @@ fn generated_jsonl_keeps_unsupported_positions_out_of_exact_rows() {
             panic!("unsupported generated rows must be rejected rows");
         };
         assert!(!rejected.reasons.is_empty());
+    }
+}
+
+#[test]
+fn non_fixture_composed_domain_jsonl_is_rejected_only() {
+    let jsonl = dataset_label::non_fixture_composed_domain_shard_jsonl(
+        dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT,
+    )
+    .unwrap();
+    let rows = dataset_label::parse_and_validate_jsonl(&jsonl).unwrap();
+
+    assert_eq!(
+        rows.len(),
+        dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT
+    );
+    assert!(rows.iter().all(|row| {
+        row.domain == dataset_label::NON_FIXTURE_COMPOSED_DOMAIN_ID
+            && row.label_kind() == LabelKind::Rejected
+    }));
+    assert!(rows.iter().all(|row| {
+        !row.domain.contains("fixture")
+            && row
+                .row_id
+                .starts_with(dataset_label::NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.row_id_prefix)
+    }));
+
+    for row in rows {
+        let LabelPayload::Rejected { rejected } = row.label else {
+            panic!("non-fixture composed-domain rows must not be exact rows");
+        };
+        assert_eq!(rejected.status, RejectedStatus::Unsupported);
+        assert!(
+            rejected
+                .reasons
+                .iter()
+                .any(|reason| reason.starts_with("unsupported_non_fixture_composition:"))
+        );
     }
 }

@@ -19,9 +19,13 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 3;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
+pub const NON_FIXTURE_COMPOSED_DOMAIN_ID: &str = "formal_domain:bitmesh_composed_chess:v0";
+pub const NON_FIXTURE_COMPOSED_DOMAIN_DEFINITION: &str =
+    "docs/formal_domain.md#wave-18-non-fixture-composed-domain";
 pub const COMPOSITION_FIXTURE_LOCKED_WALL_FEN: &str = "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 1";
 pub const COMPOSITION_FIXTURE_MISSING_COMPONENT_FEN: &str =
     "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 2";
@@ -47,6 +51,44 @@ const AMBIGUOUS_TOP_LEVEL_FIELDS: [&str; 6] = [
     "mean_value",
     "temperature",
 ];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompositionShardKind {
+    Fixture,
+    NonFixtureComposedDomain,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompositionShardConfig {
+    pub kind: CompositionShardKind,
+    pub shard_name: &'static str,
+    pub domain_id: &'static str,
+    pub domain_definition: &'static str,
+    pub generator: &'static str,
+    pub generator_config_hash: &'static str,
+    pub row_id_prefix: &'static str,
+}
+
+pub const COMPOSITION_FIXTURE_SHARD_CONFIG: CompositionShardConfig = CompositionShardConfig {
+    kind: CompositionShardKind::Fixture,
+    shard_name: "composition_fixture_hard_target",
+    domain_id: COMPOSITION_FIXTURE_DOMAIN_ID,
+    domain_definition: COMPOSITION_FIXTURE_DOMAIN_DEFINITION,
+    generator: "astralbase_composition_fixture_generator",
+    generator_config_hash: "astralbase:composition_fixture:v1",
+    row_id_prefix: "astralbase-w17-composition",
+};
+
+pub const NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG: CompositionShardConfig =
+    CompositionShardConfig {
+        kind: CompositionShardKind::NonFixtureComposedDomain,
+        shard_name: "non_fixture_composed_domain_stub",
+        domain_id: NON_FIXTURE_COMPOSED_DOMAIN_ID,
+        domain_definition: NON_FIXTURE_COMPOSED_DOMAIN_DEFINITION,
+        generator: "astralbase_non_fixture_composed_domain_stub_generator",
+        generator_config_hash: "astralbase:non_fixture_composed_domain_stub:v0",
+        row_id_prefix: "astralbase-w18-non-fixture-composed-domain",
+    };
 
 #[derive(Clone, Copy, Debug)]
 struct ExactGenerationContext {
@@ -449,7 +491,14 @@ pub fn validate_dataset_label_row(row: &DatasetLabelRow) -> LabelValidationResul
                 issues.push(LabelValidationIssue::row("exact.status must be verified"));
             }
             require_non_empty_map(&exact.value, "exact.value", &mut issues);
-            validate_exact_provenance(provenance, &mut issues);
+            validate_exact_provenance(exact, provenance, &mut issues);
+            if is_composition_domain(row.domain.as_str())
+                && provenance.certificate.composition.is_none()
+            {
+                issues.push(LabelValidationIssue::row(
+                    "composition exact rows must include structured composition certificate fields",
+                ));
+            }
         }
         LabelPayload::Rejected { rejected } => {
             if rejected.reasons.is_empty() {
@@ -589,6 +638,10 @@ pub fn composition_hard_target_shard_jsonl(limit: usize) -> Result<String, serde
     serialize_jsonl(&composition_hard_target_shard(limit))
 }
 
+pub fn non_fixture_composed_domain_shard_jsonl(limit: usize) -> Result<String, serde_json::Error> {
+    serialize_jsonl(&non_fixture_composed_domain_shard(limit))
+}
+
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
     let mut rows = SAMPLE_LABEL_CANDIDATES
@@ -683,6 +736,16 @@ pub fn composition_hard_target_shard(limit: usize) -> Vec<DatasetLabelRow> {
     );
     rows.truncate(limit);
     rows
+}
+
+#[must_use]
+pub fn non_fixture_composed_domain_shard(limit: usize) -> Vec<DatasetLabelRow> {
+    NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES
+        .iter()
+        .take(limit)
+        .enumerate()
+        .map(|(index, candidate)| non_fixture_composed_domain_rejected_row(index + 1, candidate))
+        .collect()
 }
 
 fn frontier_family_rows(
@@ -834,6 +897,12 @@ struct CompositionFixtureSpec {
 #[derive(Clone, Copy, Debug)]
 struct CompositionFixtureRejectedControl {
     row_id: &'static str,
+    fen: &'static str,
+    reason: &'static str,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct NonFixtureComposedDomainCandidate {
     fen: &'static str,
     reason: &'static str,
 }
@@ -1051,6 +1120,21 @@ const COMPOSITION_FIXTURE_REJECTED_CONTROLS: [CompositionFixtureRejectedControl;
     },
 ];
 
+const NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES: [NonFixtureComposedDomainCandidate; 3] = [
+    NonFixtureComposedDomainCandidate {
+        fen: "7k/5K2/6Q1/8/8/8/8/8 w - - 0 1",
+        reason: "unsupported_non_fixture_composition: exact BMCOMPOSE generation is not wired for composed-domain chess positions yet",
+    },
+    NonFixtureComposedDomainCandidate {
+        fen: "8/8/8/8/8/8/8/4K2k w - - 0 1",
+        reason: "unsupported_non_fixture_composition: strict decomposition and component value coverage are not complete for this composed-domain candidate",
+    },
+    NonFixtureComposedDomainCandidate {
+        fen: "8/8/8/8/4Q3/8/8/4K2k w - - 0 1",
+        reason: "unsupported_non_fixture_composition: non-fixture composition rows must remain rejected until upstream exact component solving is available",
+    },
+];
+
 impl SampleLabelCandidate {
     fn to_row(self) -> DatasetLabelRow {
         match domain::validate_first_constrained_fen(self.fen) {
@@ -1224,16 +1308,20 @@ fn composition_fixture_exact_row(spec: &CompositionFixtureSpec) -> DatasetLabelR
 
     DatasetLabelRow::exact(
         spec.row_id,
-        COMPOSITION_FIXTURE_DOMAIN_ID,
+        COMPOSITION_FIXTURE_SHARD_CONFIG.domain_id,
         DatasetPosition::fen(composition_fixture_fen(spec)),
         exact,
         ExactProvenance {
             code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
                 .unwrap_or_else(|_| "workspace".to_owned()),
-            generator: "astralbase_composition_fixture_generator".to_owned(),
-            generator_config_hash: "astralbase:composition_fixture:v1".to_owned(),
+            generator: COMPOSITION_FIXTURE_SHARD_CONFIG.generator.to_owned(),
+            generator_config_hash: COMPOSITION_FIXTURE_SHARD_CONFIG
+                .generator_config_hash
+                .to_owned(),
             random_seed: 0,
-            domain_definition: COMPOSITION_FIXTURE_DOMAIN_DEFINITION.to_owned(),
+            domain_definition: COMPOSITION_FIXTURE_SHARD_CONFIG
+                .domain_definition
+                .to_owned(),
             verifier: "bitmesh_bmcompose_fixture_sum_verifier".to_owned(),
             verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
             certificate: LabelCertificate::composition(
@@ -1371,9 +1459,24 @@ fn composition_fixture_piece(piece: char) -> shakmaty::Piece {
 fn composition_fixture_rejected_row(row_id: &str, fen: &str, reason: &str) -> DatasetLabelRow {
     DatasetLabelRow::rejected(
         row_id,
-        COMPOSITION_FIXTURE_DOMAIN_ID,
+        COMPOSITION_FIXTURE_SHARD_CONFIG.domain_id,
         DatasetPosition::fen(fen),
         RejectedLabel::excluded(vec![reason.to_owned()]),
+    )
+}
+
+fn non_fixture_composed_domain_rejected_row(
+    index: usize,
+    candidate: &NonFixtureComposedDomainCandidate,
+) -> DatasetLabelRow {
+    DatasetLabelRow::rejected(
+        format!(
+            "{}-{index:03}",
+            NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.row_id_prefix
+        ),
+        NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.domain_id,
+        DatasetPosition::fen(candidate.fen),
+        RejectedLabel::unsupported(vec![candidate.reason.to_owned()]),
     )
 }
 
@@ -1759,7 +1862,11 @@ fn validate_raw_payload_shape(value: &Value) -> Vec<String> {
     issues
 }
 
-fn validate_exact_provenance(provenance: &ExactProvenance, issues: &mut Vec<LabelValidationIssue>) {
+fn validate_exact_provenance(
+    exact: &ExactLabel,
+    provenance: &ExactProvenance,
+    issues: &mut Vec<LabelValidationIssue>,
+) {
     require_non_empty(
         provenance.code_commit.as_str(),
         "provenance.code_commit",
@@ -1786,11 +1893,12 @@ fn validate_exact_provenance(provenance: &ExactProvenance, issues: &mut Vec<Labe
         "provenance.verifier_version",
         issues,
     );
-    validate_label_certificate(&provenance.certificate, issues);
+    validate_label_certificate(&provenance.certificate, exact, issues);
 }
 
 fn validate_label_certificate(
     certificate: &LabelCertificate,
+    exact: &ExactLabel,
     issues: &mut Vec<LabelValidationIssue>,
 ) {
     require_non_empty(
@@ -1828,6 +1936,25 @@ fn validate_label_certificate(
         "provenance.certificate.result_value_digest",
         issues,
     );
+    match exact.value.get("digest") {
+        Some(exact_digest)
+            if !exact_digest.trim().is_empty()
+                && !composition.result_value_digest.trim().is_empty()
+                && composition.result_value_digest != *exact_digest =>
+        {
+            issues.push(LabelValidationIssue::row(
+                "provenance.certificate.result_value_digest must equal exact.value.digest for composition rows",
+            ));
+        }
+        Some(_) => {}
+        None => issues.push(LabelValidationIssue::row(
+            "exact.value.digest must be present for composition rows",
+        )),
+    }
+}
+
+fn is_composition_domain(domain: &str) -> bool {
+    domain == COMPOSITION_FIXTURE_DOMAIN_ID || domain == NON_FIXTURE_COMPOSED_DOMAIN_ID
 }
 
 fn require_non_empty(value: &str, field: &'static str, issues: &mut Vec<LabelValidationIssue>) {
@@ -2033,6 +2160,87 @@ mod tests {
     }
 
     #[test]
+    fn composition_result_digest_must_match_exact_digest() {
+        let mut row = composition_hard_target_shard(1).remove(0);
+        let LabelPayload::Exact { provenance, .. } = &mut row.label else {
+            panic!("fixture row should be exact");
+        };
+        let composition = provenance
+            .certificate
+            .composition
+            .as_deref_mut()
+            .expect("fixture exact row should carry composition fields");
+        composition.result_value_digest = "thermograph:mismatched-result".to_owned();
+
+        let issues = validate_dataset_label_row(&row).unwrap_err();
+        assert!(issues.iter().any(|issue| {
+            issue
+                .message
+                .contains("result_value_digest must equal exact.value.digest")
+        }));
+    }
+
+    #[test]
+    fn composition_rows_require_exact_digest() {
+        let mut row = composition_hard_target_shard(1).remove(0);
+        let LabelPayload::Exact { exact, .. } = &mut row.label else {
+            panic!("fixture row should be exact");
+        };
+        exact.value.remove("digest");
+
+        let issues = validate_dataset_label_row(&row).unwrap_err();
+        assert!(issues.iter().any(|issue| {
+            issue
+                .message
+                .contains("exact.value.digest must be present for composition rows")
+        }));
+    }
+
+    #[test]
+    fn composition_exact_rows_require_structured_certificate() {
+        let mut row = composition_hard_target_shard(1).remove(0);
+        let LabelPayload::Exact { provenance, .. } = &mut row.label else {
+            panic!("fixture row should be exact");
+        };
+        provenance.certificate = LabelCertificate::legacy("legacy-composition", "legacy-digest");
+
+        let issues = validate_dataset_label_row(&row).unwrap_err();
+        assert!(issues.iter().any(|issue| {
+            issue.message.contains(
+                "composition exact rows must include structured composition certificate fields",
+            )
+        }));
+    }
+
+    #[test]
+    fn composition_shard_configs_separate_fixture_and_non_fixture_domains() {
+        assert_eq!(
+            COMPOSITION_FIXTURE_SHARD_CONFIG.kind,
+            CompositionShardKind::Fixture
+        );
+        assert_eq!(
+            NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.kind,
+            CompositionShardKind::NonFixtureComposedDomain
+        );
+        assert_eq!(
+            COMPOSITION_FIXTURE_SHARD_CONFIG.domain_id,
+            COMPOSITION_FIXTURE_DOMAIN_ID
+        );
+        assert_eq!(
+            NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.domain_id,
+            NON_FIXTURE_COMPOSED_DOMAIN_ID
+        );
+        assert_ne!(
+            COMPOSITION_FIXTURE_SHARD_CONFIG.domain_id,
+            NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.domain_id
+        );
+        assert_ne!(
+            COMPOSITION_FIXTURE_SHARD_CONFIG.generator_config_hash,
+            NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.generator_config_hash
+        );
+    }
+
+    #[test]
     fn composition_hard_target_shard_is_deterministic_and_mixed() {
         let rows = composition_hard_target_shard(DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT);
         assert_eq!(rows.len(), DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT);
@@ -2079,6 +2287,55 @@ mod tests {
                 .count(),
             3
         );
+    }
+
+    #[test]
+    fn fixture_and_non_fixture_composition_shards_are_distinct() {
+        let fixture_rows = composition_hard_target_shard(4);
+        let non_fixture_rows =
+            non_fixture_composed_domain_shard(DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT);
+
+        assert!(
+            fixture_rows
+                .iter()
+                .all(|row| row.domain == COMPOSITION_FIXTURE_DOMAIN_ID)
+        );
+        assert!(
+            non_fixture_rows
+                .iter()
+                .all(|row| row.domain == NON_FIXTURE_COMPOSED_DOMAIN_ID)
+        );
+        assert!(
+            fixture_rows
+                .iter()
+                .any(|row| row.label_kind() == LabelKind::Exact)
+        );
+        assert!(
+            non_fixture_rows
+                .iter()
+                .all(|row| row.label_kind() == LabelKind::Rejected)
+        );
+        for non_fixture_row in &non_fixture_rows {
+            assert!(
+                non_fixture_row
+                    .row_id
+                    .starts_with(NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.row_id_prefix)
+            );
+            assert_ne!(
+                non_fixture_row.position.text,
+                COMPOSITION_FIXTURE_LOCKED_WALL_FEN
+            );
+            let LabelPayload::Rejected { rejected } = &non_fixture_row.label else {
+                panic!("non-fixture composed-domain stub rows must be rejected");
+            };
+            assert_eq!(rejected.status, RejectedStatus::Unsupported);
+            assert!(
+                rejected
+                    .reasons
+                    .iter()
+                    .any(|reason| reason.starts_with("unsupported_non_fixture_composition:"))
+            );
+        }
     }
 
     #[test]
