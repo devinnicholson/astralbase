@@ -79,5 +79,9 @@ fn non_fixture_composed_domain_jsonl_is_rejected_only() {
                 .iter()
                 .any(|reason| reason.starts_with("unsupported_non_fixture_composition:"))
         );
+        assert!(rejected.reasons.iter().any(|reason| {
+            reason.contains("conservative legal-independence proof")
+                || reason.contains("invalid FEN for conservative legal-independence proof")
+        }));
     }
 }

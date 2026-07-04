@@ -8,8 +8,8 @@ use bitmesh::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use shakmaty::{Board, Color, Square};
-use std::collections::BTreeMap;
+use shakmaty::{Board, CastlingMode, Chess, Color, Position, Square, fen::Fen};
+use std::{collections::BTreeMap, str::FromStr};
 use thermograph::{CGTValue, ExactValuePayload as ThermographExactValuePayload};
 
 pub const DATASET_LABEL_SCHEMA_VERSION: &str = "partizan.dataset_label.v0";
@@ -904,7 +904,6 @@ struct CompositionFixtureRejectedControl {
 #[derive(Clone, Copy, Debug)]
 struct NonFixtureComposedDomainCandidate {
     fen: &'static str,
-    reason: &'static str,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1123,15 +1122,12 @@ const COMPOSITION_FIXTURE_REJECTED_CONTROLS: [CompositionFixtureRejectedControl;
 const NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES: [NonFixtureComposedDomainCandidate; 3] = [
     NonFixtureComposedDomainCandidate {
         fen: "7k/5K2/6Q1/8/8/8/8/8 w - - 0 1",
-        reason: "unsupported_non_fixture_composition: exact BMCOMPOSE generation is not wired for composed-domain chess positions yet",
     },
     NonFixtureComposedDomainCandidate {
         fen: "8/8/8/8/8/8/8/4K2k w - - 0 1",
-        reason: "unsupported_non_fixture_composition: strict decomposition and component value coverage are not complete for this composed-domain candidate",
     },
     NonFixtureComposedDomainCandidate {
         fen: "8/8/8/8/4Q3/8/8/4K2k w - - 0 1",
-        reason: "unsupported_non_fixture_composition: non-fixture composition rows must remain rejected until upstream exact component solving is available",
     },
 ];
 
@@ -1469,6 +1465,7 @@ fn non_fixture_composed_domain_rejected_row(
     index: usize,
     candidate: &NonFixtureComposedDomainCandidate,
 ) -> DatasetLabelRow {
+    let reason = non_fixture_composed_domain_rejection_reason(candidate.fen);
     DatasetLabelRow::rejected(
         format!(
             "{}-{index:03}",
@@ -1476,8 +1473,38 @@ fn non_fixture_composed_domain_rejected_row(
         ),
         NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.domain_id,
         DatasetPosition::fen(candidate.fen),
-        RejectedLabel::unsupported(vec![candidate.reason.to_owned()]),
+        RejectedLabel::unsupported(vec![reason]),
     )
+}
+
+fn non_fixture_composed_domain_rejection_reason(fen: &str) -> String {
+    let board = match board_from_fen(fen) {
+        Ok(board) => board,
+        Err(error) => {
+            return format!(
+                "unsupported_non_fixture_composition: invalid FEN for conservative legal-independence proof: {error}"
+            );
+        }
+    };
+
+    let decomposition = bitmesh::certify_decomposition(&board);
+    match bitmesh::verify_conservative_legal_independence(&board, &decomposition) {
+        Ok(proof) => format!(
+            "unsupported_non_fixture_composition: conservative legal-independence proof {} with {} components is available, but exact component solving and BMCOMPOSE promotion are not wired yet",
+            proof.proof_kind, proof.component_count
+        ),
+        Err(error) => format!(
+            "unsupported_non_fixture_composition: conservative legal-independence proof rejected: {error:?}"
+        ),
+    }
+}
+
+fn board_from_fen(fen: &str) -> Result<Board, String> {
+    let parsed = Fen::from_str(fen).map_err(|error| error.to_string())?;
+    let position: Chess = parsed
+        .into_position(CastlingMode::Standard)
+        .map_err(|error| error.to_string())?;
+    Ok(position.board().clone())
 }
 
 fn terminal_exact_row(
