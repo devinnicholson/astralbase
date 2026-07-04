@@ -103,8 +103,8 @@ pub const NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG: CompositionShardConfig =
         shard_name: "non_fixture_composed_board_material",
         domain_id: NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID,
         domain_definition: NON_FIXTURE_COMPOSED_BOARD_DOMAIN_DEFINITION,
-        generator: "astralbase_non_fixture_composed_board_material_generator",
-        generator_config_hash: "astralbase:non_fixture_composed_board_material:v0",
+        generator: "astralbase_non_fixture_composed_board_generator",
+        generator_config_hash: "astralbase:non_fixture_composed_board:profiled_depth2_v0",
         row_id_prefix: "astralbase-w18-non-fixture-composed-board",
     };
 
@@ -945,6 +945,7 @@ struct NonFixtureComposedBoardSpec<'a> {
     fullmove_number: u32,
     value_rule: NonFixtureComposedBoardValueRule,
     topology_family: &'static str,
+    spec_source: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1030,6 +1031,9 @@ const DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_l
 const DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY: &str =
     "dfile_two_component_depth2_asymmetric_fan_v0";
 const DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_pawn_phalanx_v0";
+const CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE: &str = "curated_non_fixture_board_spec_v0";
+const PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE: &str =
+    "profiled_depth2_component_pair_generator_v0";
 const GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY: usize = 1;
 const GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES: usize = 1_000;
 const GENERATED_DEPTH_TWO_START_FULLMOVE: u32 = 200;
@@ -1275,6 +1279,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 101,
         value_rule: NonFixtureComposedBoardValueRule::MaterialBalanceSum,
         topology_family: MATERIAL_BALANCE_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-002",
@@ -1288,6 +1293,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 102,
         value_rule: NonFixtureComposedBoardValueRule::MaterialBalanceSum,
         topology_family: MATERIAL_BALANCE_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-003",
@@ -1295,6 +1301,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 103,
         value_rule: NonFixtureComposedBoardValueRule::MaterialBalanceSum,
         topology_family: MATERIAL_BALANCE_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-004",
@@ -1302,6 +1309,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 104,
         value_rule: NonFixtureComposedBoardValueRule::AgencyAtomSum,
         topology_family: AGENCY_ATOM_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-005",
@@ -1314,6 +1322,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 105,
         value_rule: NonFixtureComposedBoardValueRule::LocalMoveGame,
         topology_family: LOCAL_MOVE_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-006",
@@ -1327,6 +1336,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 106,
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
         topology_family: DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-007",
@@ -1340,6 +1350,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 107,
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
         topology_family: DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-008",
@@ -1356,6 +1367,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 108,
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
         topology_family: DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-009",
@@ -1370,6 +1382,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 109,
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
         topology_family: DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-010",
@@ -1386,6 +1399,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 110,
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
         topology_family: DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-011",
@@ -1404,6 +1418,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'stat
         fullmove_number: 111,
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
         topology_family: DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY,
+        spec_source: CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE,
     },
 ];
 
@@ -1482,6 +1497,7 @@ fn generated_depth_two_composed_board_exact_rows(
                             .expect("generated row number fits fullmove u32"),
                     value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
                     topology_family,
+                    spec_source: PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE,
                 };
                 let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
                     continue;
@@ -2301,6 +2317,10 @@ fn try_non_fixture_composed_board_exact_row(
     exact.value.insert(
         "component_topology_family".to_owned(),
         spec.topology_family.to_owned(),
+    );
+    exact.value.insert(
+        "composition_spec_source".to_owned(),
+        spec.spec_source.to_owned(),
     );
     exact
         .value
@@ -3674,6 +3694,14 @@ mod tests {
                             .get("component_topology_family")
                             .is_some_and(|family| !family.is_empty())
                     );
+                    assert!(matches!(
+                        exact
+                            .value
+                            .get("composition_spec_source")
+                            .map(String::as_str),
+                        Some(CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE)
+                            | Some(PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE)
+                    ));
                     assert!(
                         exact
                             .value

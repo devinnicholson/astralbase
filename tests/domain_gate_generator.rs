@@ -146,6 +146,28 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
             .count(),
         2
     );
+    let spec_source_counts = rows
+        .iter()
+        .filter_map(|row| match &row.label {
+            LabelPayload::Exact { exact, .. } => {
+                exact.value.get("composition_spec_source").cloned()
+            }
+            _ => None,
+        })
+        .fold(
+            std::collections::BTreeMap::<String, usize>::new(),
+            |mut counts, source| {
+                *counts.entry(source).or_default() += 1;
+                counts
+            },
+        );
+    assert_eq!(
+        spec_source_counts,
+        std::collections::BTreeMap::from([
+            ("curated_non_fixture_board_spec_v0".to_owned(), 11),
+            ("profiled_depth2_component_pair_generator_v0".to_owned(), 2),
+        ])
+    );
     let depth_two_family_counts = rows
         .iter()
         .filter_map(|row| match &row.label {
@@ -193,6 +215,14 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                         .get("component_topology_family")
                         .is_some_and(|family| !family.is_empty())
                 );
+                assert!(matches!(
+                    exact
+                        .value
+                        .get("composition_spec_source")
+                        .map(String::as_str),
+                    Some("curated_non_fixture_board_spec_v0")
+                        | Some("profiled_depth2_component_pair_generator_v0")
+                ));
                 assert!(
                     exact
                         .value
