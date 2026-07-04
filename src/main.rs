@@ -71,6 +71,17 @@ fn main() {
             );
             return;
         }
+        Some("--leakage-clean-non-fixture-composed-domain-shard") => {
+            let rows_per_family = parse_leakage_clean_non_fixture_composed_domain_rows(args);
+            print!(
+                "{}",
+                dataset_label::leakage_clean_non_fixture_composed_domain_shard_jsonl(
+                    rows_per_family
+                )
+                .expect("leakage-clean non-fixture composed-domain shard must serialize")
+            );
+            return;
+        }
         Some("--replay-non-fixture-composed-domain-shard") => {
             let path = parse_replay_non_fixture_composed_domain_path(args);
             let input = std::fs::read_to_string(path.as_str()).unwrap_or_else(|error| {
@@ -139,6 +150,7 @@ Commands:\n\
   --composition-hard-target-shard [--limit N]\n\
   --non-fixture-composed-domain-shard [--limit N]\n\
   --expanded-non-fixture-composed-domain-shard [--rows-per-family N]\n\
+  --leakage-clean-non-fixture-composed-domain-shard [--rows-per-family N]\n\
   --replay-non-fixture-composed-domain-shard PATH\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
   --help\n"
@@ -156,6 +168,16 @@ fn parse_expanded_non_fixture_composed_domain_rows(
         &mut args,
         "--expanded-non-fixture-composed-domain-shard",
         dataset_label::DEFAULT_EXPANDED_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY,
+    )
+}
+
+fn parse_leakage_clean_non_fixture_composed_domain_rows(
+    mut args: impl Iterator<Item = String>,
+) -> usize {
+    parse_rows_per_family_arg(
+        &mut args,
+        "--leakage-clean-non-fixture-composed-domain-shard",
+        dataset_label::DEFAULT_LEAKAGE_CLEAN_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY,
     )
 }
 

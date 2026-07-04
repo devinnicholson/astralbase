@@ -499,6 +499,71 @@ fn expanded_non_fixture_composed_domain_jsonl_has_profiled_rows_per_topology() {
 }
 
 #[test]
+fn leakage_clean_non_fixture_composed_domain_jsonl_has_no_reuse_capacity() {
+    let jsonl = dataset_label::leakage_clean_non_fixture_composed_domain_shard_jsonl(
+        dataset_label::DEFAULT_LEAKAGE_CLEAN_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY,
+    )
+    .unwrap();
+    let rows = dataset_label::parse_and_validate_jsonl(&jsonl).unwrap();
+
+    assert_eq!(rows.len(), 21);
+    assert_eq!(
+        rows.iter()
+            .filter(
+                |row| row.domain == dataset_label::NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID
+                    && row.label_kind() == LabelKind::Exact
+            )
+            .count(),
+        18
+    );
+    assert_eq!(
+        rows.iter()
+            .filter(
+                |row| row.domain == dataset_label::NON_FIXTURE_COMPOSED_DOMAIN_ID
+                    && row.label_kind() == LabelKind::Rejected
+            )
+            .count(),
+        3
+    );
+
+    let generated_depth_two_family_counts = rows
+        .iter()
+        .filter_map(|row| match &row.label {
+            LabelPayload::Exact { exact, .. }
+                if exact
+                    .value
+                    .get("composition_spec_source")
+                    .map(String::as_str)
+                    == Some("profiled_depth2_component_pair_generator_v0") =>
+            {
+                exact.value.get("component_topology_family").cloned()
+            }
+            _ => None,
+        })
+        .fold(
+            std::collections::BTreeMap::<String, usize>::new(),
+            |mut counts, family| {
+                *counts.entry(family).or_default() += 1;
+                counts
+            },
+        );
+    assert_eq!(
+        generated_depth_two_family_counts,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 2),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 3),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2),
+        ])
+    );
+
+    let report = dataset_label::replay_verify_non_fixture_composed_domain_jsonl(&jsonl).unwrap();
+    assert_eq!(report.row_count, 21);
+    assert_eq!(report.checked_exact_rows, 18);
+    assert_eq!(report.skipped_rejected_rows, 3);
+    assert_eq!(report.skipped_non_target_rows, 0);
+}
+
+#[test]
 fn non_fixture_composed_domain_replay_rejects_stale_recomputable_fields() {
     let mut rows = dataset_label::non_fixture_composed_domain_shard(
         dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT,

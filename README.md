@@ -32,6 +32,7 @@ Dataset shard commands used by the Partizan research harness:
 ```bash
 cargo run --quiet -- --non-fixture-composed-domain-shard
 cargo run --quiet -- --expanded-non-fixture-composed-domain-shard --rows-per-family 10
+cargo run --quiet -- --leakage-clean-non-fixture-composed-domain-shard --rows-per-family 10
 cargo run --quiet -- --replay-non-fixture-composed-domain-shard /tmp/astralbase-w22-expanded-composition.jsonl
 ```
 

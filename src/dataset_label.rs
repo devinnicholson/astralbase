@@ -25,6 +25,7 @@ pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
 pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 20;
 pub const DEFAULT_EXPANDED_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY: usize = 10;
 pub const DEFAULT_EXPANDED_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 44;
+pub const DEFAULT_LEAKAGE_CLEAN_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY: usize = 10;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -767,6 +768,14 @@ pub fn expanded_non_fixture_composed_domain_shard_jsonl(
     serialize_jsonl(&expanded_non_fixture_composed_domain_shard(rows_per_family))
 }
 
+pub fn leakage_clean_non_fixture_composed_domain_shard_jsonl(
+    rows_per_family: usize,
+) -> Result<String, serde_json::Error> {
+    serialize_jsonl(&leakage_clean_non_fixture_composed_domain_shard(
+        rows_per_family,
+    ))
+}
+
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
     let mut rows = SAMPLE_LABEL_CANDIDATES
@@ -884,6 +893,18 @@ pub fn non_fixture_composed_domain_shard(limit: usize) -> Vec<DatasetLabelRow> {
 pub fn expanded_non_fixture_composed_domain_shard(rows_per_family: usize) -> Vec<DatasetLabelRow> {
     let mut rows = non_fixture_composed_domain_seed_rows();
     rows.extend(generated_depth_two_profiled_composed_board_exact_rows(
+        &rows,
+        rows_per_family,
+    ));
+    rows
+}
+
+#[must_use]
+pub fn leakage_clean_non_fixture_composed_domain_shard(
+    rows_per_family: usize,
+) -> Vec<DatasetLabelRow> {
+    let mut rows = non_fixture_composed_domain_seed_rows();
+    rows.extend(generated_depth_two_leakage_clean_composed_board_exact_rows(
         &rows,
         rows_per_family,
     ));
@@ -1165,6 +1186,16 @@ struct NonFixtureCompositionReplay {
     decomposition_digest: String,
     composition_digest: String,
     component_values: BTreeMap<String, String>,
+    result_value_digest: String,
+}
+
+#[derive(Clone, Debug)]
+struct CompositionIdentitySummary {
+    decomposition_digest: String,
+    composition_digest: String,
+    component_identities: Vec<String>,
+    component_value_digests: Vec<String>,
+    component_value_identities: Vec<String>,
     result_value_digest: String,
 }
 
@@ -1851,6 +1882,95 @@ fn generated_depth_two_profiled_composed_board_exact_rows(
     rows
 }
 
+fn generated_depth_two_leakage_clean_composed_board_exact_rows(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family: usize,
+) -> Vec<DatasetLabelRow> {
+    let selection = generated_depth_two_profile_selection(seed_rows, rows_per_family, false);
+
+    let mut rows = Vec::with_capacity(selection.candidates.len());
+    let mut seen_positions = BTreeSet::new();
+    let mut seen_decomposition_digests = BTreeSet::new();
+    let mut seen_composition_digests = BTreeSet::new();
+    let mut seen_component_identities = BTreeSet::new();
+    let mut seen_component_value_digests = BTreeSet::new();
+    let mut seen_component_value_identities = BTreeSet::new();
+    let mut seen_result_digests = BTreeSet::new();
+    for row in seed_rows {
+        seen_positions.insert(row.position.text.clone());
+        if let Some(summary) = composition_identity_summary_for_row(row) {
+            seen_decomposition_digests.insert(summary.decomposition_digest);
+            seen_composition_digests.insert(summary.composition_digest);
+            seen_result_digests.insert(summary.result_value_digest);
+            seen_component_identities.extend(summary.component_identities);
+            seen_component_value_digests.extend(summary.component_value_digests);
+            seen_component_value_identities.extend(summary.component_value_identities);
+        }
+    }
+
+    for candidate in selection.candidates {
+        let row_id = format!(
+            "{}-{:03}",
+            NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix, candidate.row_number
+        );
+        let spec = NonFixtureComposedBoardSpec {
+            row_id: &row_id,
+            active_pieces: &candidate.active_pieces,
+            fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
+                + u32::try_from(candidate.row_number)
+                    .expect("generated row number fits fullmove u32"),
+            value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+            topology_family: candidate.topology_family,
+            spec_source: PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE,
+        };
+        let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
+            continue;
+        };
+        if !generated_depth_two_row_within_node_budget(&row) {
+            continue;
+        }
+        let Some(summary) = composition_identity_summary_for_row(&row) else {
+            continue;
+        };
+        if has_duplicates(&summary.component_identities)
+            || has_duplicates(&summary.component_value_digests)
+            || has_duplicates(&summary.component_value_identities)
+        {
+            continue;
+        }
+        if seen_positions.contains(&row.position.text)
+            || seen_decomposition_digests.contains(&summary.decomposition_digest)
+            || seen_composition_digests.contains(&summary.composition_digest)
+            || seen_result_digests.contains(&summary.result_value_digest)
+            || summary
+                .component_identities
+                .iter()
+                .any(|identity| seen_component_identities.contains(identity))
+            || summary
+                .component_value_digests
+                .iter()
+                .any(|digest| seen_component_value_digests.contains(digest))
+            || summary
+                .component_value_identities
+                .iter()
+                .any(|identity| seen_component_value_identities.contains(identity))
+        {
+            continue;
+        }
+
+        seen_positions.insert(row.position.text.clone());
+        seen_decomposition_digests.insert(summary.decomposition_digest);
+        seen_composition_digests.insert(summary.composition_digest);
+        seen_result_digests.insert(summary.result_value_digest);
+        seen_component_identities.extend(summary.component_identities);
+        seen_component_value_digests.extend(summary.component_value_digests);
+        seen_component_value_identities.extend(summary.component_value_identities);
+        rows.push(row);
+    }
+
+    rows
+}
+
 fn generated_depth_two_profile_search_report_with_seed(
     seed_rows: &[DatasetLabelRow],
     rows_per_family_target: usize,
@@ -2487,6 +2607,39 @@ fn composition_digest_summary_for_row(
         composition.result_value_digest.clone(),
         component_digests,
     ))
+}
+
+fn composition_identity_summary_for_row(
+    row: &DatasetLabelRow,
+) -> Option<CompositionIdentitySummary> {
+    let LabelPayload::Exact { provenance, .. } = &row.label else {
+        return None;
+    };
+    let composition = provenance.certificate.composition.as_ref()?;
+    let mut component_identities = Vec::new();
+    let mut component_value_digests = Vec::new();
+    let mut component_value_identities = Vec::new();
+    for (component_root, value_digest) in &composition.component_values {
+        let component_identity = format!("{}:{component_root}", composition.decomposition_digest);
+        component_identities.push(component_identity.clone());
+        component_value_digests.push(value_digest.clone());
+        component_value_identities.push(format!("{component_identity}={value_digest}"));
+    }
+    component_identities.sort();
+    component_value_digests.sort();
+    component_value_identities.sort();
+    Some(CompositionIdentitySummary {
+        decomposition_digest: composition.decomposition_digest.clone(),
+        composition_digest: composition.composition_digest.clone(),
+        component_identities,
+        component_value_digests,
+        component_value_identities,
+        result_value_digest: composition.result_value_digest.clone(),
+    })
+}
+
+fn has_duplicates(values: &[String]) -> bool {
+    values.iter().collect::<BTreeSet<_>>().len() != values.len()
 }
 
 impl SampleLabelCandidate {
