@@ -22,7 +22,7 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
-pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 17;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 20;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -93,7 +93,7 @@ pub const NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG: CompositionShardConfig =
         domain_id: NON_FIXTURE_COMPOSED_DOMAIN_ID,
         domain_definition: NON_FIXTURE_COMPOSED_DOMAIN_DEFINITION,
         generator: "astralbase_non_fixture_composed_domain_generator",
-        generator_config_hash: "astralbase:non_fixture_composed_domain:v2",
+        generator_config_hash: "astralbase:non_fixture_composed_domain:v3",
         row_id_prefix: "astralbase-w18-non-fixture-composed-domain",
     };
 
@@ -104,7 +104,7 @@ pub const NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG: CompositionShardConfig =
         domain_id: NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID,
         domain_definition: NON_FIXTURE_COMPOSED_BOARD_DOMAIN_DEFINITION,
         generator: "astralbase_non_fixture_composed_board_generator",
-        generator_config_hash: "astralbase:non_fixture_composed_board:profiled_depth2_v1",
+        generator_config_hash: "astralbase:non_fixture_composed_board:profiled_depth2_v2",
         row_id_prefix: "astralbase-w18-non-fixture-composed-board",
     };
 
@@ -1034,10 +1034,19 @@ const DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_pawn
 const CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE: &str = "curated_non_fixture_board_spec_v0";
 const PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE: &str =
     "profiled_depth2_component_pair_generator_v0";
-const GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY: usize = 1;
+const GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY: usize = 2;
+const GENERATED_DEPTH_TWO_MAX_COMPONENT_RECURSIVE_NODES: usize = 220;
 const GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES: usize = 1_000;
 const GENERATED_DEPTH_TWO_START_FULLMOVE: u32 = 200;
-const GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT: usize = 24;
+const GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT: usize = 64;
+const GENERATED_DEPTH_TWO_PROFILE_PAIR_PLAN: [(usize, usize, &str); 6] = [
+    (6, 7, DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY),
+    (7, 8, DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY),
+    (8, 13, DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY),
+    (11, 11, DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY),
+    (13, 9, DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY),
+    (14, 6, DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY),
+];
 
 #[derive(Clone, Debug)]
 struct GeneratedDepthTwoComponentProfile {
@@ -1455,107 +1464,90 @@ fn generated_depth_two_composed_board_exact_rows(
         }
     }
 
-    for (family_index, topology_family) in topology_families.iter().enumerate() {
-        let family_target = rows_per_family;
-        let mut family_count = 0usize;
-        'family_rows: for (left_index, left) in white_profiles.iter().enumerate() {
-            for right_offset in 0..black_profiles.len() {
-                let right_index = generated_pair_index(
-                    left_index,
-                    right_offset,
-                    family_index,
-                    black_profiles.len(),
-                );
-                let right = &black_profiles[right_index];
-                let total_recursive_nodes = left.recursive_nodes + right.recursive_nodes;
-                if total_recursive_nodes > GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES
-                    || left.value_digest == right.value_digest
-                    || seen_component_digests.contains(&left.value_digest)
-                    || seen_component_digests.contains(&right.value_digest)
-                {
-                    continue;
-                }
-                let result_value = CGTValue::sum_all(&[left.value.clone(), right.value.clone()]);
-                let result_payload = result_value.exact_value_payload();
-                if seen_result_digests.contains(&result_payload.digest) {
-                    continue;
-                }
-
-                let mut active_pieces = left.active_pieces.clone();
-                active_pieces.extend(right.active_pieces.iter().copied());
-                active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
-
-                let row_id = format!(
-                    "{}-{:03}",
-                    NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix, next_row_number
-                );
-                let spec = NonFixtureComposedBoardSpec {
-                    row_id: &row_id,
-                    active_pieces: &active_pieces,
-                    fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
-                        + u32::try_from(next_row_number)
-                            .expect("generated row number fits fullmove u32"),
-                    value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
-                    topology_family,
-                    spec_source: PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE,
-                };
-                let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
-                    continue;
-                };
-                if !generated_depth_two_row_within_node_budget(&row) {
-                    continue;
-                }
-                let Some((decomposition_digest, result_digest, component_digests)) =
-                    composition_digest_summary_for_row(&row)
-                else {
-                    continue;
-                };
-                if component_digests.iter().collect::<BTreeSet<_>>().len()
-                    != component_digests.len()
-                {
-                    continue;
-                }
-                if seen_decomposition_digests.contains(&decomposition_digest)
-                    || seen_result_digests.contains(&result_digest)
-                    || component_digests
-                        .iter()
-                        .any(|digest| seen_component_digests.contains(digest))
-                    || seen_positions.contains(&row.position.text)
-                {
-                    continue;
-                }
-
-                seen_positions.insert(row.position.text.clone());
-                seen_decomposition_digests.insert(decomposition_digest);
-                seen_result_digests.insert(result_digest);
-                for digest in component_digests {
-                    seen_component_digests.insert(digest);
-                }
-                rows.push(row);
-                next_row_number += 1;
-                family_count += 1;
-                if family_count == family_target {
-                    break 'family_rows;
-                }
-            }
+    let mut family_counts = vec![0usize; topology_families.len()];
+    for (left_index, right_index, topology_family) in GENERATED_DEPTH_TWO_PROFILE_PAIR_PLAN {
+        let Some(family_index) = topology_families
+            .iter()
+            .position(|family| *family == topology_family)
+        else {
+            continue;
+        };
+        if family_counts[family_index] == rows_per_family {
+            continue;
         }
+        let (Some(left), Some(right)) = (
+            white_profiles.get(left_index),
+            black_profiles.get(right_index),
+        ) else {
+            continue;
+        };
+        let total_recursive_nodes = left.recursive_nodes + right.recursive_nodes;
+        if total_recursive_nodes > GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES
+            || left.value_digest == right.value_digest
+            || seen_component_digests.contains(&left.value_digest)
+            || seen_component_digests.contains(&right.value_digest)
+        {
+            continue;
+        }
+        let result_value = CGTValue::sum_all(&[left.value.clone(), right.value.clone()]);
+        let result_payload = result_value.exact_value_payload();
+        if seen_result_digests.contains(&result_payload.digest) {
+            continue;
+        }
+
+        let mut active_pieces = left.active_pieces.clone();
+        active_pieces.extend(right.active_pieces.iter().copied());
+        active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
+
+        let row_id = format!(
+            "{}-{:03}",
+            NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix, next_row_number
+        );
+        let spec = NonFixtureComposedBoardSpec {
+            row_id: &row_id,
+            active_pieces: &active_pieces,
+            fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
+                + u32::try_from(next_row_number).expect("generated row number fits fullmove u32"),
+            value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+            topology_family,
+            spec_source: PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE,
+        };
+        let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
+            continue;
+        };
+        if !generated_depth_two_row_within_node_budget(&row) {
+            continue;
+        }
+        let Some((decomposition_digest, result_digest, component_digests)) =
+            composition_digest_summary_for_row(&row)
+        else {
+            continue;
+        };
+        if component_digests.iter().collect::<BTreeSet<_>>().len() != component_digests.len() {
+            continue;
+        }
+        if seen_decomposition_digests.contains(&decomposition_digest)
+            || seen_result_digests.contains(&result_digest)
+            || component_digests
+                .iter()
+                .any(|digest| seen_component_digests.contains(digest))
+            || seen_positions.contains(&row.position.text)
+        {
+            continue;
+        }
+
+        seen_positions.insert(row.position.text.clone());
+        seen_decomposition_digests.insert(decomposition_digest);
+        seen_result_digests.insert(result_digest);
+        for digest in component_digests {
+            seen_component_digests.insert(digest);
+        }
+        rows.push(row);
+        next_row_number += 1;
+        family_counts[family_index] += 1;
     }
 
     rows
-}
-
-fn generated_pair_index(
-    left_index: usize,
-    right_offset: usize,
-    family_index: usize,
-    black_profile_count: usize,
-) -> usize {
-    match family_index {
-        0 => (left_index + right_offset) % black_profile_count,
-        1 => (left_index * 3 + right_offset + 5) % black_profile_count,
-        2 => (left_index * 5 + right_offset * 2 + 7) % black_profile_count,
-        _ => unreachable!("generated topology family index is bounded"),
-    }
 }
 
 fn generated_depth_two_component_profiles(
@@ -1567,7 +1559,7 @@ fn generated_depth_two_component_profiles(
         let Some(profile) = generated_depth_two_component_profile(active_pieces) else {
             continue;
         };
-        if profile.recursive_nodes <= GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES
+        if profile.recursive_nodes <= GENERATED_DEPTH_TWO_MAX_COMPONENT_RECURSIVE_NODES
             && seen_value_digests.insert(profile.value_digest.clone())
         {
             profiles.push(profile);
@@ -1689,6 +1681,33 @@ fn generated_white_component_patterns() -> Vec<Vec<(Square, char)>> {
             (Square::B2, 'P'),
             (Square::C2, 'P'),
         ],
+        vec![
+            (Square::A1, 'R'),
+            (Square::B1, 'B'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![(Square::A1, 'Q'), (Square::B1, 'B'), (Square::C2, 'P')],
+        vec![
+            (Square::A1, 'R'),
+            (Square::B1, 'R'),
+            (Square::A2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![
+            (Square::A1, 'Q'),
+            (Square::B1, 'R'),
+            (Square::A2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![
+            (Square::A1, 'Q'),
+            (Square::B1, 'R'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+        ],
     ];
     patterns.extend(generated_component_patterns(&[
         (Square::A1, &['N', 'B', 'R', 'Q'][..]),
@@ -1769,6 +1788,27 @@ fn generated_black_component_patterns() -> Vec<Vec<(Square, char)>> {
             (Square::H7, 'p'),
             (Square::G7, 'p'),
             (Square::F7, 'p'),
+        ],
+        vec![(Square::H8, 'q'), (Square::H7, 'p'), (Square::G7, 'p')],
+        vec![(Square::H8, 'q'), (Square::G8, 'b'), (Square::H7, 'p')],
+        vec![
+            (Square::H8, 'q'),
+            (Square::G8, 'r'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+        ],
+        vec![
+            (Square::H8, 'q'),
+            (Square::G8, 'r'),
+            (Square::F8, 'n'),
+            (Square::H7, 'p'),
+        ],
+        vec![
+            (Square::H8, 'q'),
+            (Square::G8, 'r'),
+            (Square::F8, 'n'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
         ],
     ];
     patterns.extend(generated_component_patterns(&[

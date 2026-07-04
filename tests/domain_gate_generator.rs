@@ -57,6 +57,10 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
         rows.len(),
         dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT
     );
+    assert_eq!(
+        dataset_label::non_fixture_composed_domain_shard(50).len(),
+        dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT
+    );
     assert!(rows.iter().all(|row| {
         !row.domain.contains("fixture")
             && (row
@@ -73,7 +77,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     && row.label_kind() == LabelKind::Exact
             )
             .count(),
-        14
+        17
     );
     assert_eq!(
         rows.iter()
@@ -133,7 +137,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                 )
             })
             .count(),
-        9
+        12
     );
     assert_eq!(
         rows.iter()
@@ -144,7 +148,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     && row.label_kind() == LabelKind::Exact
             })
             .count(),
-        3
+        6
     );
     let spec_source_counts = rows
         .iter()
@@ -165,7 +169,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
         spec_source_counts,
         std::collections::BTreeMap::from([
             ("curated_non_fixture_board_spec_v0".to_owned(), 11),
-            ("profiled_depth2_component_pair_generator_v0".to_owned(), 3),
+            ("profiled_depth2_component_pair_generator_v0".to_owned(), 6),
         ])
     );
     let depth_two_family_counts = rows
@@ -192,11 +196,68 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
     assert_eq!(
         depth_two_family_counts,
         std::collections::BTreeMap::from([
-            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 3,),
-            ("dfile_two_component_depth2_local_move_v0".to_owned(), 3),
-            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 3,),
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 4,),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 4),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 4,),
         ])
     );
+    let generated_depth_two_family_counts = rows
+        .iter()
+        .filter_map(|row| match &row.label {
+            LabelPayload::Exact { exact, .. }
+                if exact
+                    .value
+                    .get("composition_spec_source")
+                    .map(String::as_str)
+                    == Some("profiled_depth2_component_pair_generator_v0") =>
+            {
+                exact.value.get("component_topology_family").cloned()
+            }
+            _ => None,
+        })
+        .fold(
+            std::collections::BTreeMap::<String, usize>::new(),
+            |mut counts, family| {
+                *counts.entry(family).or_default() += 1;
+                counts
+            },
+        );
+    assert_eq!(
+        generated_depth_two_family_counts,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 2,),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 2),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2,),
+        ])
+    );
+
+    let mut positions = std::collections::BTreeSet::new();
+    let mut decomposition_digests = std::collections::BTreeSet::new();
+    let mut composition_digests = std::collections::BTreeSet::new();
+    let mut result_digests = std::collections::BTreeSet::new();
+    let mut component_value_digests = std::collections::BTreeSet::new();
+    for row in rows
+        .iter()
+        .filter(|row| row.label_kind() == LabelKind::Exact)
+    {
+        assert!(positions.insert(row.position.text.clone()));
+        let LabelPayload::Exact { provenance, .. } = &row.label else {
+            unreachable!("exact rows are filtered above");
+        };
+        let composition = provenance
+            .certificate
+            .composition
+            .as_ref()
+            .expect("exact composition row carries structured certificate");
+        assert!(decomposition_digests.insert(composition.decomposition_digest.clone()));
+        assert!(composition_digests.insert(composition.composition_digest.clone()));
+        assert!(result_digests.insert(composition.result_value_digest.clone()));
+        let mut row_component_value_digests = std::collections::BTreeSet::new();
+        for value_digest in composition.component_values.values() {
+            assert!(row_component_value_digests.insert(value_digest.clone()));
+            assert!(component_value_digests.insert(value_digest.clone()));
+        }
+    }
 
     for row in rows {
         match row.label {
