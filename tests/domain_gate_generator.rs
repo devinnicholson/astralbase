@@ -73,7 +73,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     && row.label_kind() == LabelKind::Exact
             )
             .count(),
-        13
+        14
     );
     assert_eq!(
         rows.iter()
@@ -133,7 +133,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                 )
             })
             .count(),
-        8
+        9
     );
     assert_eq!(
         rows.iter()
@@ -144,7 +144,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     && row.label_kind() == LabelKind::Exact
             })
             .count(),
-        2
+        3
     );
     let spec_source_counts = rows
         .iter()
@@ -165,7 +165,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
         spec_source_counts,
         std::collections::BTreeMap::from([
             ("curated_non_fixture_board_spec_v0".to_owned(), 11),
-            ("profiled_depth2_component_pair_generator_v0".to_owned(), 2),
+            ("profiled_depth2_component_pair_generator_v0".to_owned(), 3),
         ])
     );
     let depth_two_family_counts = rows
@@ -194,7 +194,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
         std::collections::BTreeMap::from([
             ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 3,),
             ("dfile_two_component_depth2_local_move_v0".to_owned(), 3),
-            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2,),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 3,),
         ])
     );
 

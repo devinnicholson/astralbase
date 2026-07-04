@@ -22,7 +22,7 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
-pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 16;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 17;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -93,7 +93,7 @@ pub const NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG: CompositionShardConfig =
         domain_id: NON_FIXTURE_COMPOSED_DOMAIN_ID,
         domain_definition: NON_FIXTURE_COMPOSED_DOMAIN_DEFINITION,
         generator: "astralbase_non_fixture_composed_domain_generator",
-        generator_config_hash: "astralbase:non_fixture_composed_domain:v1",
+        generator_config_hash: "astralbase:non_fixture_composed_domain:v2",
         row_id_prefix: "astralbase-w18-non-fixture-composed-domain",
     };
 
@@ -104,7 +104,7 @@ pub const NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG: CompositionShardConfig =
         domain_id: NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID,
         domain_definition: NON_FIXTURE_COMPOSED_BOARD_DOMAIN_DEFINITION,
         generator: "astralbase_non_fixture_composed_board_generator",
-        generator_config_hash: "astralbase:non_fixture_composed_board:profiled_depth2_v0",
+        generator_config_hash: "astralbase:non_fixture_composed_board:profiled_depth2_v1",
         row_id_prefix: "astralbase-w18-non-fixture-composed-board",
     };
 
