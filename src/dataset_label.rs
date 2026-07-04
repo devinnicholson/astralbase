@@ -19,7 +19,7 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
-pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 8;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 9;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -944,6 +944,7 @@ enum NonFixtureComposedBoardValueRule {
     MaterialBalanceSum,
     AgencyAtomSum,
     LocalMoveGame,
+    DepthTwoLocalMoveGame,
 }
 
 impl NonFixtureComposedBoardValueRule {
@@ -952,6 +953,7 @@ impl NonFixtureComposedBoardValueRule {
             Self::MaterialBalanceSum => "composition_board_material_components",
             Self::AgencyAtomSum => "composition_board_agency_atoms",
             Self::LocalMoveGame => "composition_board_component_local_moves",
+            Self::DepthTwoLocalMoveGame => "composition_board_component_depth2_local_moves",
         }
     }
 
@@ -960,6 +962,7 @@ impl NonFixtureComposedBoardValueRule {
             Self::MaterialBalanceSum => "component_material_balance_sum_v0",
             Self::AgencyAtomSum => "component_agency_atom_sum_v0",
             Self::LocalMoveGame => "component_local_move_game_v0",
+            Self::DepthTwoLocalMoveGame => "component_depth2_local_move_game_v0",
         }
     }
 
@@ -968,6 +971,9 @@ impl NonFixtureComposedBoardValueRule {
             Self::MaterialBalanceSum => "bitmesh_conservative_board_material_bmcompose_verifier",
             Self::AgencyAtomSum => "bitmesh_conservative_board_agency_atom_bmcompose_verifier",
             Self::LocalMoveGame => "bitmesh_conservative_component_local_move_bmcompose_verifier",
+            Self::DepthTwoLocalMoveGame => {
+                "bitmesh_conservative_component_depth2_local_move_bmcompose_verifier"
+            }
         }
     }
 
@@ -982,6 +988,9 @@ impl NonFixtureComposedBoardValueRule {
             Self::LocalMoveGame => {
                 "bitmesh-bmcompose-v1+thermograph-exact-value+component-local-move-v0"
             }
+            Self::DepthTwoLocalMoveGame => {
+                "bitmesh-bmcompose-v1+thermograph-exact-value+component-depth2-local-move-v0"
+            }
         }
     }
 }
@@ -991,6 +1000,21 @@ struct ComponentLocalMoveCounts {
     white: usize,
     black: usize,
 }
+
+#[derive(Clone, Debug)]
+struct ComponentValueEvaluation {
+    value: CGTValue,
+    recursive_depth: Option<u8>,
+    recursive_nodes: Option<usize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ComponentLocalMove {
+    from: Square,
+    to: Square,
+}
+
+const COMPONENT_DEPTH_TWO_LOCAL_MOVE_DEPTH: u8 = 2;
 
 #[derive(Clone, Copy, Debug)]
 enum CompositionFixtureTopology {
@@ -1217,7 +1241,7 @@ const NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES: [NonFixtureComposedDomainCandidate
     },
 ];
 
-const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 5] = [
+const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 6] = [
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-001",
         active_pieces: &[(Square::A1, 'N'), (Square::H8, 'n'), (Square::G7, 'p')],
@@ -1258,6 +1282,18 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 5] =
         ],
         fullmove_number: 105,
         value_rule: NonFixtureComposedBoardValueRule::LocalMoveGame,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-006",
+        active_pieces: &[
+            (Square::A1, 'N'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::H8, 'n'),
+            (Square::H7, 'p'),
+        ],
+        fullmove_number: 106,
+        value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
     },
 ];
 
@@ -1599,15 +1635,32 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
     let mut component_value_class_summaries = Vec::new();
     let mut component_material_summaries = Vec::new();
     let mut component_local_move_summaries = Vec::new();
+    let mut component_recursive_node_summaries = Vec::new();
+    let mut total_recursive_nodes = 0usize;
     let mut component_cgt_values = Vec::new();
 
     for component in components {
         let material_value = component_material_balance(&board, component.active_mask);
         let local_move_counts =
             component_local_move_counts(&board, component.mask, component.active_mask);
-        let component_value =
-            component_cgt_value(spec.value_rule, material_value, local_move_counts);
-        let payload = component_value.exact_value_payload();
+        let component_evaluation = component_cgt_evaluation(
+            spec.value_rule,
+            &board,
+            component.mask,
+            component.active_mask,
+            material_value,
+            local_move_counts,
+        );
+        if let Some(recursive_nodes) = component_evaluation.recursive_nodes {
+            total_recursive_nodes += recursive_nodes;
+            component_recursive_node_summaries.push(format!(
+                "{}=depth:{},nodes:{}",
+                component.root,
+                component_evaluation.recursive_depth.unwrap_or(0),
+                recursive_nodes
+            ));
+        }
+        let payload = component_evaluation.value.exact_value_payload();
         component_values.insert(component.root.to_string(), payload.digest.clone());
         bmcompose_component_values.push(CompositionComponentValue {
             component_root: component.root,
@@ -1628,7 +1681,7 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
             "{}=white:{},black:{}",
             component.root, local_move_counts.white, local_move_counts.black
         ));
-        component_cgt_values.push(component_value);
+        component_cgt_values.push(component_evaluation.value);
     }
 
     let result_value = CGTValue::sum_all(&component_cgt_values);
@@ -1682,6 +1735,24 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
         "component_local_move_counts".to_owned(),
         component_local_move_summaries.join(","),
     );
+    if !component_recursive_node_summaries.is_empty() {
+        exact.value.insert(
+            "solver_depth".to_owned(),
+            COMPONENT_DEPTH_TWO_LOCAL_MOVE_DEPTH.to_string(),
+        );
+        exact.value.insert(
+            "component_recursive_node_counts".to_owned(),
+            component_recursive_node_summaries.join(","),
+        );
+        exact.value.insert(
+            "component_recursive_total_nodes".to_owned(),
+            total_recursive_nodes.to_string(),
+        );
+        exact.value.insert(
+            "recursive_leaf_rule".to_owned(),
+            "component_material_balance_at_depth_cutoff_or_no_moves_v0".to_owned(),
+        );
+    }
     exact.value.insert(
         "result_digest_v1_sha256".to_owned(),
         result_value.digest_v1_sha256(),
@@ -1775,12 +1846,15 @@ fn component_material_balance(board: &Board, active_mask: shakmaty::Bitboard) ->
         .sum()
 }
 
-fn component_cgt_value(
+fn component_cgt_evaluation(
     value_rule: NonFixtureComposedBoardValueRule,
+    board: &Board,
+    component_mask: shakmaty::Bitboard,
+    active_mask: shakmaty::Bitboard,
     material_balance: i32,
     local_move_counts: ComponentLocalMoveCounts,
-) -> CGTValue {
-    match value_rule {
+) -> ComponentValueEvaluation {
+    let value = match value_rule {
         NonFixtureComposedBoardValueRule::MaterialBalanceSum => CGTValue::Integer(material_balance),
         NonFixtureComposedBoardValueRule::AgencyAtomSum => {
             component_agency_atom_value(material_balance)
@@ -1788,6 +1862,25 @@ fn component_cgt_value(
         NonFixtureComposedBoardValueRule::LocalMoveGame => {
             component_local_move_game_value(local_move_counts)
         }
+        NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame => {
+            let (value, nodes) = component_recursive_local_move_game_value(
+                board,
+                component_mask,
+                active_mask,
+                COMPONENT_DEPTH_TWO_LOCAL_MOVE_DEPTH,
+            );
+            return ComponentValueEvaluation {
+                value,
+                recursive_depth: Some(COMPONENT_DEPTH_TWO_LOCAL_MOVE_DEPTH),
+                recursive_nodes: Some(nodes),
+            };
+        }
+    };
+
+    ComponentValueEvaluation {
+        value,
+        recursive_depth: None,
+        recursive_nodes: None,
     }
 }
 
@@ -1815,6 +1908,55 @@ fn component_local_move_game_value(local_move_counts: ComponentLocalMoveCounts) 
         )]
     };
     CGTValue::GameTree { left, right }
+}
+
+fn component_recursive_local_move_game_value(
+    board: &Board,
+    component_mask: shakmaty::Bitboard,
+    active_mask: shakmaty::Bitboard,
+    depth: u8,
+) -> (CGTValue, usize) {
+    let material_value = component_material_balance(board, active_mask);
+    if depth == 0 {
+        return (CGTValue::Integer(material_value), 1);
+    }
+
+    let left_moves = component_local_moves(board, component_mask, active_mask, Color::White);
+    let right_moves = component_local_moves(board, component_mask, active_mask, Color::Black);
+    if left_moves.is_empty() && right_moves.is_empty() {
+        return (CGTValue::Integer(material_value), 1);
+    }
+
+    let mut node_count = 1;
+    let mut left = Vec::with_capacity(left_moves.len());
+    for local_move in left_moves {
+        let (child_board, child_active_mask) =
+            apply_component_local_move(board, active_mask, local_move);
+        let (child_value, child_nodes) = component_recursive_local_move_game_value(
+            &child_board,
+            component_mask,
+            child_active_mask,
+            depth - 1,
+        );
+        node_count += child_nodes;
+        left.push(child_value);
+    }
+
+    let mut right = Vec::with_capacity(right_moves.len());
+    for local_move in right_moves {
+        let (child_board, child_active_mask) =
+            apply_component_local_move(board, active_mask, local_move);
+        let (child_value, child_nodes) = component_recursive_local_move_game_value(
+            &child_board,
+            component_mask,
+            child_active_mask,
+            depth - 1,
+        );
+        node_count += child_nodes;
+        right.push(child_value);
+    }
+
+    (CGTValue::GameTree { left, right }, node_count)
 }
 
 fn component_local_move_counts(
@@ -1862,6 +2004,50 @@ fn component_local_move_count(
     count
 }
 
+fn component_local_moves(
+    board: &Board,
+    component_mask: shakmaty::Bitboard,
+    active_mask: shakmaty::Bitboard,
+    color: Color,
+) -> Vec<ComponentLocalMove> {
+    let mut moves = Vec::new();
+    for from in active_mask {
+        let piece = board
+            .piece_at(from)
+            .expect("component active mask square must contain a piece");
+        if piece.color != color {
+            continue;
+        }
+
+        if piece.role == shakmaty::Role::Pawn {
+            moves.extend(
+                (shakmaty::attacks::pawn_attacks(color, from)
+                    & board.by_color(!color)
+                    & component_mask)
+                    .into_iter()
+                    .map(|to| ComponentLocalMove { from, to }),
+            );
+            moves.extend(component_local_pawn_quiet_moves(
+                board,
+                component_mask,
+                from,
+                color,
+            ));
+        } else {
+            moves.extend(
+                (shakmaty::attacks::attacks(from, piece, board.occupied())
+                    & !board.by_color(color)
+                    & component_mask)
+                    .into_iter()
+                    .map(|to| ComponentLocalMove { from, to }),
+            );
+        }
+    }
+
+    moves.sort_by_key(|local_move| (usize::from(local_move.from), usize::from(local_move.to)));
+    moves
+}
+
 fn component_local_pawn_quiet_move_count(
     board: &Board,
     component_mask: shakmaty::Bitboard,
@@ -1892,6 +2078,58 @@ fn component_local_pawn_quiet_move_count(
         count += 1;
     }
     count
+}
+
+fn component_local_pawn_quiet_moves(
+    board: &Board,
+    component_mask: shakmaty::Bitboard,
+    from: Square,
+    color: Color,
+) -> Vec<ComponentLocalMove> {
+    let occupied = board.occupied();
+    let forward_offset = if color == Color::White { 8 } else { -8 };
+    let start_rank = if color == Color::White {
+        shakmaty::Rank::Second
+    } else {
+        shakmaty::Rank::Seventh
+    };
+
+    let mut moves = Vec::with_capacity(2);
+    let Some(one_step) = from.offset(forward_offset) else {
+        return moves;
+    };
+    if occupied.contains(one_step) || !component_mask.contains(one_step) {
+        return moves;
+    }
+
+    moves.push(ComponentLocalMove { from, to: one_step });
+    if from.rank() == start_rank
+        && let Some(two_step) = one_step.offset(forward_offset)
+        && !occupied.contains(two_step)
+        && component_mask.contains(two_step)
+    {
+        moves.push(ComponentLocalMove { from, to: two_step });
+    }
+    moves
+}
+
+fn apply_component_local_move(
+    board: &Board,
+    active_mask: shakmaty::Bitboard,
+    local_move: ComponentLocalMove,
+) -> (Board, shakmaty::Bitboard) {
+    let mut child = board.clone();
+    let piece = child
+        .remove_piece_at(local_move.from)
+        .expect("component local move origin must contain a piece");
+    child.discard_piece_at(local_move.to);
+    child.set_piece_at(local_move.to, piece);
+
+    let mut child_active_mask = active_mask;
+    child_active_mask.discard(local_move.from);
+    child_active_mask.discard(local_move.to);
+    child_active_mask.add(local_move.to);
+    (child, child_active_mask)
 }
 
 fn material_value(role: shakmaty::Role) -> i32 {
@@ -2831,6 +3069,7 @@ mod tests {
                         Some("component_material_balance_sum_v0")
                             | Some("component_agency_atom_sum_v0")
                             | Some("component_local_move_game_v0")
+                            | Some("component_depth2_local_move_game_v0")
                     ));
                     assert_ne!(
                         composition_value_rule,
@@ -2879,6 +3118,37 @@ mod tests {
                             assert_eq!(
                                 provenance.verifier,
                                 "bitmesh_conservative_component_local_move_bmcompose_verifier"
+                            );
+                        }
+                        Some("component_depth2_local_move_game_v0") => {
+                            assert_eq!(
+                                exact.value.get("solver_scope").map(String::as_str),
+                                Some("composition_board_component_depth2_local_moves")
+                            );
+                            assert_eq!(exact.value_class, ExactValueClass::GameTree);
+                            assert_eq!(
+                                exact.value.get("solver_depth").map(String::as_str),
+                                Some("2")
+                            );
+                            assert_eq!(
+                                exact.value.get("recursive_leaf_rule").map(String::as_str),
+                                Some("component_material_balance_at_depth_cutoff_or_no_moves_v0")
+                            );
+                            let component_recursive_node_counts = exact
+                                .value
+                                .get("component_recursive_node_counts")
+                                .expect("depth-2 row records recursive node counts");
+                            assert!(component_recursive_node_counts.contains("depth:2"));
+                            assert!(
+                                exact
+                                    .value
+                                    .get("component_recursive_total_nodes")
+                                    .and_then(|nodes| nodes.parse::<usize>().ok())
+                                    .is_some_and(|nodes| nodes > 2)
+                            );
+                            assert_eq!(
+                                provenance.verifier,
+                                "bitmesh_conservative_component_depth2_local_move_bmcompose_verifier"
                             );
                         }
                         _ => unreachable!("validated composition value rule"),

@@ -73,7 +73,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     && row.label_kind() == LabelKind::Exact
             )
             .count(),
-        5
+        6
     );
     assert_eq!(
         rows.iter()
@@ -118,6 +118,23 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
             .count(),
         1
     );
+    assert_eq!(
+        rows.iter()
+            .filter(|row| {
+                matches!(
+                    &row.label,
+                    LabelPayload::Exact { exact, .. }
+                        if exact
+                            .value
+                            .get("composition_value_rule")
+                            .map(String::as_str)
+                            == Some("component_depth2_local_move_game_v0")
+                            && exact.value_class == dataset_label::ExactValueClass::GameTree
+                )
+            })
+            .count(),
+        1
+    );
 
     for row in rows {
         match row.label {
@@ -135,6 +152,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     Some("component_material_balance_sum_v0")
                         | Some("component_agency_atom_sum_v0")
                         | Some("component_local_move_game_v0")
+                        | Some("component_depth2_local_move_game_v0")
                 ));
                 if composition_value_rule == Some("component_agency_atom_sum_v0") {
                     assert_eq!(exact.value_class, dataset_label::ExactValueClass::GameTree);
@@ -153,6 +171,29 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                         .expect("local move row records component move counts");
                     assert!(component_local_move_counts.contains("white:"));
                     assert!(component_local_move_counts.contains("black:"));
+                }
+                if composition_value_rule == Some("component_depth2_local_move_game_v0") {
+                    assert_eq!(exact.value_class, dataset_label::ExactValueClass::GameTree);
+                    assert_eq!(
+                        exact.value.get("solver_depth").map(String::as_str),
+                        Some("2")
+                    );
+                    assert_eq!(
+                        exact.value.get("recursive_leaf_rule").map(String::as_str),
+                        Some("component_material_balance_at_depth_cutoff_or_no_moves_v0")
+                    );
+                    let recursive_node_counts = exact
+                        .value
+                        .get("component_recursive_node_counts")
+                        .expect("depth-2 row records component recursive node counts");
+                    assert!(recursive_node_counts.contains("depth:2"));
+                    assert!(
+                        exact
+                            .value
+                            .get("component_recursive_total_nodes")
+                            .and_then(|nodes| nodes.parse::<usize>().ok())
+                            .is_some_and(|nodes| nodes > 2)
+                    );
                 }
                 assert_eq!(
                     exact.value.get("proof_kind").map(String::as_str),
