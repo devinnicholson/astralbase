@@ -46,7 +46,7 @@ fn generated_jsonl_keeps_unsupported_positions_out_of_exact_rows() {
 }
 
 #[test]
-fn non_fixture_composed_domain_jsonl_is_rejected_only() {
+fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_rows() {
     let jsonl = dataset_label::non_fixture_composed_domain_shard_jsonl(
         dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT,
     )
@@ -58,30 +58,76 @@ fn non_fixture_composed_domain_jsonl_is_rejected_only() {
         dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT
     );
     assert!(rows.iter().all(|row| {
-        row.domain == dataset_label::NON_FIXTURE_COMPOSED_DOMAIN_ID
-            && row.label_kind() == LabelKind::Rejected
-    }));
-    assert!(rows.iter().all(|row| {
         !row.domain.contains("fixture")
-            && row
+            && (row
                 .row_id
                 .starts_with(dataset_label::NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.row_id_prefix)
+                || row.row_id.starts_with(
+                    dataset_label::NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix,
+                ))
     }));
+    assert_eq!(
+        rows.iter()
+            .filter(
+                |row| row.domain == dataset_label::NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID
+                    && row.label_kind() == LabelKind::Exact
+            )
+            .count(),
+        3
+    );
+    assert_eq!(
+        rows.iter()
+            .filter(
+                |row| row.domain == dataset_label::NON_FIXTURE_COMPOSED_DOMAIN_ID
+                    && row.label_kind() == LabelKind::Rejected
+            )
+            .count(),
+        3
+    );
 
     for row in rows {
-        let LabelPayload::Rejected { rejected } = row.label else {
-            panic!("non-fixture composed-domain rows must not be exact rows");
-        };
-        assert_eq!(rejected.status, RejectedStatus::Unsupported);
-        assert!(
-            rejected
-                .reasons
-                .iter()
-                .any(|reason| reason.starts_with("unsupported_non_fixture_composition:"))
-        );
-        assert!(rejected.reasons.iter().any(|reason| {
-            reason.contains("conservative legal-independence proof")
-                || reason.contains("invalid FEN for conservative legal-independence proof")
-        }));
+        match row.label {
+            LabelPayload::Exact { exact, provenance } => {
+                assert_eq!(
+                    row.domain,
+                    dataset_label::NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID
+                );
+                assert_eq!(
+                    exact
+                        .value
+                        .get("composition_value_rule")
+                        .map(String::as_str),
+                    Some("component_material_balance_sum_v0")
+                );
+                assert_eq!(
+                    exact.value.get("proof_kind").map(String::as_str),
+                    Some("bitmesh:conservative_legal_independence:v0")
+                );
+                assert!(
+                    provenance
+                        .certificate
+                        .composition
+                        .as_ref()
+                        .is_some_and(|composition| {
+                            composition.result_value_digest == *exact.value.get("digest").unwrap()
+                        })
+                );
+            }
+            LabelPayload::Rejected { rejected } => {
+                assert_eq!(row.domain, dataset_label::NON_FIXTURE_COMPOSED_DOMAIN_ID);
+                assert_eq!(rejected.status, RejectedStatus::Unsupported);
+                assert!(
+                    rejected
+                        .reasons
+                        .iter()
+                        .any(|reason| reason.starts_with("unsupported_non_fixture_composition:"))
+                );
+                assert!(rejected.reasons.iter().any(|reason| {
+                    reason.contains("conservative legal-independence proof")
+                        || reason.contains("invalid FEN for conservative legal-independence proof")
+                }));
+            }
+            _ => panic!("non-fixture composed-domain rows must be exact or rejected"),
+        }
     }
 }

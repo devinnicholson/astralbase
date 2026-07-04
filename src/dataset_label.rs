@@ -19,13 +19,17 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
-pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 3;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 6;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
 pub const NON_FIXTURE_COMPOSED_DOMAIN_ID: &str = "formal_domain:bitmesh_composed_chess:v0";
 pub const NON_FIXTURE_COMPOSED_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-18-non-fixture-composed-domain";
+pub const NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID: &str =
+    "formal_domain:bitmesh_composed_board_material:v0";
+pub const NON_FIXTURE_COMPOSED_BOARD_DOMAIN_DEFINITION: &str =
+    "docs/formal_domain.md#wave-18-board-material-composition";
 pub const COMPOSITION_FIXTURE_LOCKED_WALL_FEN: &str = "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 1";
 pub const COMPOSITION_FIXTURE_MISSING_COMPONENT_FEN: &str =
     "7n/8/8/PPPPPPPP/PPPPPPPP/8/8/N7 w - - 0 2";
@@ -82,12 +86,23 @@ pub const COMPOSITION_FIXTURE_SHARD_CONFIG: CompositionShardConfig = Composition
 pub const NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG: CompositionShardConfig =
     CompositionShardConfig {
         kind: CompositionShardKind::NonFixtureComposedDomain,
-        shard_name: "non_fixture_composed_domain_stub",
+        shard_name: "non_fixture_composed_domain_mixed",
         domain_id: NON_FIXTURE_COMPOSED_DOMAIN_ID,
         domain_definition: NON_FIXTURE_COMPOSED_DOMAIN_DEFINITION,
-        generator: "astralbase_non_fixture_composed_domain_stub_generator",
-        generator_config_hash: "astralbase:non_fixture_composed_domain_stub:v0",
+        generator: "astralbase_non_fixture_composed_domain_generator",
+        generator_config_hash: "astralbase:non_fixture_composed_domain:v1",
         row_id_prefix: "astralbase-w18-non-fixture-composed-domain",
+    };
+
+pub const NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG: CompositionShardConfig =
+    CompositionShardConfig {
+        kind: CompositionShardKind::NonFixtureComposedDomain,
+        shard_name: "non_fixture_composed_board_material",
+        domain_id: NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID,
+        domain_definition: NON_FIXTURE_COMPOSED_BOARD_DOMAIN_DEFINITION,
+        generator: "astralbase_non_fixture_composed_board_material_generator",
+        generator_config_hash: "astralbase:non_fixture_composed_board_material:v0",
+        row_id_prefix: "astralbase-w18-non-fixture-composed-board",
     };
 
 #[derive(Clone, Copy, Debug)]
@@ -740,12 +755,22 @@ pub fn composition_hard_target_shard(limit: usize) -> Vec<DatasetLabelRow> {
 
 #[must_use]
 pub fn non_fixture_composed_domain_shard(limit: usize) -> Vec<DatasetLabelRow> {
-    NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES
-        .iter()
-        .take(limit)
-        .enumerate()
-        .map(|(index, candidate)| non_fixture_composed_domain_rejected_row(index + 1, candidate))
-        .collect()
+    let mut rows = Vec::new();
+    rows.extend(
+        NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS
+            .iter()
+            .map(non_fixture_composed_board_exact_row),
+    );
+    rows.extend(
+        NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                non_fixture_composed_domain_rejected_row(index + 1, candidate)
+            }),
+    );
+    rows.truncate(limit);
+    rows
 }
 
 fn frontier_family_rows(
@@ -904,6 +929,13 @@ struct CompositionFixtureRejectedControl {
 #[derive(Clone, Copy, Debug)]
 struct NonFixtureComposedDomainCandidate {
     fen: &'static str,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct NonFixtureComposedBoardSpec {
+    row_id: &'static str,
+    active_pieces: &'static [(Square, char)],
+    fullmove_number: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1128,6 +1160,30 @@ const NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES: [NonFixtureComposedDomainCandidate
     },
     NonFixtureComposedDomainCandidate {
         fen: "8/8/8/8/4Q3/8/8/4K2k w - - 0 1",
+    },
+];
+
+const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 3] = [
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-001",
+        active_pieces: &[(Square::A1, 'N'), (Square::H8, 'n'), (Square::G7, 'p')],
+        fullmove_number: 101,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-002",
+        active_pieces: &[
+            (Square::A1, 'N'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::H8, 'p'),
+            (Square::G7, 'p'),
+        ],
+        fullmove_number: 102,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-003",
+        active_pieces: &[(Square::A2, 'n'), (Square::H7, 'N'), (Square::G6, 'P')],
+        fullmove_number: 103,
     },
 ];
 
@@ -1449,6 +1505,188 @@ fn composition_fixture_piece(piece: char) -> shakmaty::Piece {
         'q' => Color::Black.queen(),
         'r' => Color::Black.rook(),
         _ => panic!("unsupported composition fixture piece: {piece}"),
+    }
+}
+
+fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> DatasetLabelRow {
+    let board = non_fixture_composed_board(spec);
+    let decomposition = bitmesh::certify_decomposition(&board);
+    let proof = bitmesh::verify_conservative_legal_independence(&board, &decomposition)
+        .expect("non-fixture board composition spec must pass conservative independence proof");
+    let decomposition_digest = proof.decomposition_digest;
+
+    let mut components = decomposition.components.iter().collect::<Vec<_>>();
+    components.sort_by_key(|component| component.root);
+
+    let mut component_values = BTreeMap::new();
+    let mut bmcompose_component_values = Vec::new();
+    let mut component_value_summaries = Vec::new();
+    let mut component_material_summaries = Vec::new();
+    let mut component_cgt_values = Vec::new();
+
+    for component in components {
+        let material_value = component_material_balance(&board, component.active_mask);
+        let component_value = CGTValue::Integer(material_value);
+        let payload = component_value.exact_value_payload();
+        component_values.insert(component.root.to_string(), payload.digest.clone());
+        bmcompose_component_values.push(CompositionComponentValue {
+            component_root: component.root,
+            value_digest: payload.digest.clone(),
+        });
+        component_value_summaries.push(format!(
+            "{}={}",
+            component.root, payload.canonical_serialization
+        ));
+        component_material_summaries.push(format!("{}={material_value}", component.root));
+        component_cgt_values.push(component_value);
+    }
+
+    let result_value = CGTValue::sum_all(&component_cgt_values);
+    let result_payload = result_value.exact_value_payload();
+    let bmcompose = BitmeshCompositionCertificate {
+        decomposition_digest,
+        component_values: bmcompose_component_values,
+        result_value_digest: result_payload.digest.clone(),
+    };
+    bmcompose
+        .validate_against_decomposition(&decomposition)
+        .expect("non-fixture board composition must satisfy BMCOMPOSE root coverage");
+    let composition_digest = bmcompose
+        .digest()
+        .expect("non-fixture board composition certificate must digest")
+        .to_string();
+
+    let mut exact = ExactLabel::from_thermograph_payload(&result_payload);
+    exact.value.insert(
+        "solver_scope".to_owned(),
+        "composition_board_material_components".to_owned(),
+    );
+    exact.value.insert(
+        "composition_value_rule".to_owned(),
+        "component_material_balance_sum_v0".to_owned(),
+    );
+    exact
+        .value
+        .insert("proof_kind".to_owned(), proof.proof_kind.to_owned());
+    exact.value.insert(
+        "component_count".to_owned(),
+        proof.component_count.to_string(),
+    );
+    exact.value.insert(
+        "component_roots".to_owned(),
+        component_values
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(","),
+    );
+    exact.value.insert(
+        "component_values".to_owned(),
+        component_value_summaries.join(","),
+    );
+    exact.value.insert(
+        "component_material_balances".to_owned(),
+        component_material_summaries.join(","),
+    );
+    exact.value.insert(
+        "result_digest_v1_sha256".to_owned(),
+        result_value.digest_v1_sha256(),
+    );
+
+    DatasetLabelRow::exact(
+        spec.row_id,
+        NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.domain_id,
+        DatasetPosition::fen(non_fixture_composed_board_fen(spec)),
+        exact,
+        ExactProvenance {
+            code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
+                .unwrap_or_else(|_| "workspace".to_owned()),
+            generator: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.generator.to_owned(),
+            generator_config_hash: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG
+                .generator_config_hash
+                .to_owned(),
+            random_seed: 0,
+            domain_definition: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG
+                .domain_definition
+                .to_owned(),
+            verifier: "bitmesh_conservative_board_material_bmcompose_verifier".to_owned(),
+            verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
+            certificate: LabelCertificate::composition(
+                "bitmesh-bmcompose-v1+thermograph-exact-value+board-material-v0",
+                format!(
+                    "bitmesh:{};proof:{};bmcompose:{};thermograph:{}",
+                    decomposition_digest,
+                    proof.proof_kind,
+                    composition_digest,
+                    result_payload.digest
+                ),
+                decomposition_digest.to_string(),
+                composition_digest,
+                component_values,
+                result_payload.digest,
+            ),
+        },
+    )
+}
+
+fn non_fixture_composed_board(spec: &NonFixtureComposedBoardSpec) -> Board {
+    let mut board = Board::empty();
+    for (square, piece) in non_fixture_composed_board_wall_pieces() {
+        board.set_piece_at(square, composition_fixture_piece(piece));
+    }
+    for (square, piece) in spec.active_pieces {
+        board.set_piece_at(*square, composition_fixture_piece(*piece));
+    }
+    board
+}
+
+fn non_fixture_composed_board_fen(spec: &NonFixtureComposedBoardSpec) -> String {
+    let mut pieces = non_fixture_composed_board_wall_pieces()
+        .into_iter()
+        .map(|(square, piece)| (usize::from(square), piece))
+        .collect::<Vec<_>>();
+    pieces.extend(
+        spec.active_pieces
+            .iter()
+            .map(|(square, piece)| (usize::from(*square), *piece)),
+    );
+    let board = board_fen(&pieces);
+    format!("{board} w - - 0 {}", spec.fullmove_number)
+}
+
+fn non_fixture_composed_board_wall_pieces() -> Vec<(Square, char)> {
+    vec![
+        (Square::D1, 'P'),
+        (Square::D2, 'p'),
+        (Square::D3, 'P'),
+        (Square::D4, 'p'),
+        (Square::D5, 'P'),
+        (Square::D6, 'p'),
+        (Square::D7, 'P'),
+        (Square::D8, 'p'),
+    ]
+}
+
+fn component_material_balance(board: &Board, active_mask: shakmaty::Bitboard) -> i32 {
+    active_mask
+        .into_iter()
+        .map(|square| {
+            let piece = board
+                .piece_at(square)
+                .expect("component active mask square must contain a piece");
+            let sign = if piece.color == Color::White { 1 } else { -1 };
+            sign * material_value(piece.role)
+        })
+        .sum()
+}
+
+fn material_value(role: shakmaty::Role) -> i32 {
+    match role {
+        shakmaty::Role::Pawn => 1,
+        shakmaty::Role::Knight | shakmaty::Role::Bishop => 3,
+        shakmaty::Role::Rook => 5,
+        shakmaty::Role::Queen => 9,
+        shakmaty::Role::King => 0,
     }
 }
 
@@ -1981,7 +2219,9 @@ fn validate_label_certificate(
 }
 
 fn is_composition_domain(domain: &str) -> bool {
-    domain == COMPOSITION_FIXTURE_DOMAIN_ID || domain == NON_FIXTURE_COMPOSED_DOMAIN_ID
+    domain == COMPOSITION_FIXTURE_DOMAIN_ID
+        || domain == NON_FIXTURE_COMPOSED_DOMAIN_ID
+        || domain == NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID
 }
 
 fn require_non_empty(value: &str, field: &'static str, issues: &mut Vec<LabelValidationIssue>) {
@@ -2257,13 +2497,21 @@ mod tests {
             NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.domain_id,
             NON_FIXTURE_COMPOSED_DOMAIN_ID
         );
+        assert_eq!(
+            NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.domain_id,
+            NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID
+        );
         assert_ne!(
             COMPOSITION_FIXTURE_SHARD_CONFIG.domain_id,
             NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.domain_id
         );
         assert_ne!(
+            NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.domain_id,
+            NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.domain_id
+        );
+        assert_ne!(
             COMPOSITION_FIXTURE_SHARD_CONFIG.generator_config_hash,
-            NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.generator_config_hash
+            NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.generator_config_hash
         );
     }
 
@@ -2328,11 +2576,6 @@ mod tests {
                 .all(|row| row.domain == COMPOSITION_FIXTURE_DOMAIN_ID)
         );
         assert!(
-            non_fixture_rows
-                .iter()
-                .all(|row| row.domain == NON_FIXTURE_COMPOSED_DOMAIN_ID)
-        );
-        assert!(
             fixture_rows
                 .iter()
                 .any(|row| row.label_kind() == LabelKind::Exact)
@@ -2340,28 +2583,72 @@ mod tests {
         assert!(
             non_fixture_rows
                 .iter()
-                .all(|row| row.label_kind() == LabelKind::Rejected)
+                .any(|row| row.domain == NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID
+                    && row.label_kind() == LabelKind::Exact)
+        );
+        assert!(
+            non_fixture_rows
+                .iter()
+                .any(|row| row.domain == NON_FIXTURE_COMPOSED_DOMAIN_ID
+                    && row.label_kind() == LabelKind::Rejected)
         );
         for non_fixture_row in &non_fixture_rows {
             assert!(
                 non_fixture_row
                     .row_id
                     .starts_with(NON_FIXTURE_COMPOSED_DOMAIN_SHARD_CONFIG.row_id_prefix)
+                    || non_fixture_row
+                        .row_id
+                        .starts_with(NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix)
             );
             assert_ne!(
                 non_fixture_row.position.text,
                 COMPOSITION_FIXTURE_LOCKED_WALL_FEN
             );
-            let LabelPayload::Rejected { rejected } = &non_fixture_row.label else {
-                panic!("non-fixture composed-domain stub rows must be rejected");
-            };
-            assert_eq!(rejected.status, RejectedStatus::Unsupported);
-            assert!(
-                rejected
-                    .reasons
-                    .iter()
-                    .any(|reason| reason.starts_with("unsupported_non_fixture_composition:"))
-            );
+            match &non_fixture_row.label {
+                LabelPayload::Exact { exact, provenance } => {
+                    assert_eq!(non_fixture_row.domain, NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID);
+                    assert_eq!(
+                        exact.value.get("solver_scope").map(String::as_str),
+                        Some("composition_board_material_components")
+                    );
+                    assert_eq!(
+                        exact
+                            .value
+                            .get("composition_value_rule")
+                            .map(String::as_str),
+                        Some("component_material_balance_sum_v0")
+                    );
+                    assert_ne!(
+                        exact
+                            .value
+                            .get("composition_value_rule")
+                            .map(String::as_str),
+                        Some("component_index_integer_sum_fixture_v0")
+                    );
+                    assert_eq!(
+                        exact.value.get("proof_kind").map(String::as_str),
+                        Some("bitmesh:conservative_legal_independence:v0")
+                    );
+                    assert_eq!(
+                        provenance.verifier,
+                        "bitmesh_conservative_board_material_bmcompose_verifier"
+                    );
+                    assert!(provenance.certificate.composition.as_ref().is_some_and(
+                        |composition| {
+                            composition.result_value_digest == *exact.value.get("digest").unwrap()
+                        }
+                    ));
+                }
+                LabelPayload::Rejected { rejected } => {
+                    assert_eq!(non_fixture_row.domain, NON_FIXTURE_COMPOSED_DOMAIN_ID);
+                    assert_eq!(rejected.status, RejectedStatus::Unsupported);
+                    assert!(rejected.reasons.iter().any(|reason| {
+                        reason.starts_with("unsupported_non_fixture_composition:")
+                    }));
+                }
+                _ => panic!("non-fixture composition shard contains unsupported label kind"),
+            }
         }
     }
 
