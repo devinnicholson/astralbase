@@ -62,6 +62,32 @@ fn main() {
             );
             return;
         }
+        Some("--replay-non-fixture-composed-domain-shard") => {
+            let path = parse_replay_non_fixture_composed_domain_path(args);
+            let input = std::fs::read_to_string(path.as_str()).unwrap_or_else(|error| {
+                eprintln!("could not read {path}: {error}");
+                std::process::exit(2);
+            });
+            match dataset_label::replay_verify_non_fixture_composed_domain_jsonl(input.as_str()) {
+                Ok(report) => {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&report)
+                            .expect("replay report must serialize")
+                    );
+                }
+                Err(issues) => {
+                    for issue in issues {
+                        match issue.line_number {
+                            Some(line_number) => eprintln!("line {line_number}: {}", issue.message),
+                            None => eprintln!("{}", issue.message),
+                        }
+                    }
+                    std::process::exit(1);
+                }
+            }
+            return;
+        }
         Some(arg) => {
             eprintln!("unsupported argument: {arg}");
             std::process::exit(2);
@@ -93,8 +119,21 @@ Commands:\n\
   --expanded-family-frontier-label-shard [--limit-per-family N]\n\
   --composition-hard-target-shard [--limit N]\n\
   --non-fixture-composed-domain-shard [--limit N]\n\
+  --replay-non-fixture-composed-domain-shard PATH\n\
   --help\n"
     );
+}
+
+fn parse_replay_non_fixture_composed_domain_path(mut args: impl Iterator<Item = String>) -> String {
+    let path = args.next().unwrap_or_else(|| {
+        eprintln!("--replay-non-fixture-composed-domain-shard requires a JSONL path");
+        std::process::exit(2);
+    });
+    if let Some(extra) = args.next() {
+        eprintln!("unsupported argument for --replay-non-fixture-composed-domain-shard: {extra}");
+        std::process::exit(2);
+    }
+    path
 }
 
 fn parse_non_fixture_composed_domain_limit(mut args: impl Iterator<Item = String>) -> usize {

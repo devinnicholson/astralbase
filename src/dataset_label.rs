@@ -632,6 +632,61 @@ pub fn parse_and_validate_jsonl(input: &str) -> LabelValidationResult<Vec<Datase
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NonFixtureCompositionReplayReport {
+    pub row_count: usize,
+    pub checked_exact_rows: usize,
+    pub skipped_rejected_rows: usize,
+    pub skipped_non_target_rows: usize,
+}
+
+pub fn replay_verify_non_fixture_composed_domain_jsonl(
+    input: &str,
+) -> LabelValidationResult<NonFixtureCompositionReplayReport> {
+    let rows = parse_and_validate_jsonl(input)?;
+    replay_verify_non_fixture_composed_domain_rows(&rows)
+}
+
+pub fn replay_verify_non_fixture_composed_domain_rows(
+    rows: &[DatasetLabelRow],
+) -> LabelValidationResult<NonFixtureCompositionReplayReport> {
+    let mut report = NonFixtureCompositionReplayReport {
+        row_count: rows.len(),
+        checked_exact_rows: 0,
+        skipped_rejected_rows: 0,
+        skipped_non_target_rows: 0,
+    };
+    let mut issues = Vec::new();
+
+    for row in rows {
+        match &row.label {
+            LabelPayload::Exact { exact, provenance }
+                if row.domain == NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID =>
+            {
+                report.checked_exact_rows += 1;
+                replay_verify_non_fixture_composed_board_exact_row(
+                    row,
+                    exact,
+                    provenance,
+                    &mut issues,
+                );
+            }
+            LabelPayload::Rejected { .. } if row.domain == NON_FIXTURE_COMPOSED_DOMAIN_ID => {
+                report.skipped_rejected_rows += 1;
+            }
+            _ => {
+                report.skipped_non_target_rows += 1;
+            }
+        }
+    }
+
+    if issues.is_empty() {
+        Ok(report)
+    } else {
+        Err(issues)
+    }
+}
+
 pub fn sample_audited_shard_jsonl() -> Result<String, serde_json::Error> {
     serialize_jsonl(&sample_audited_shard())
 }
@@ -963,6 +1018,16 @@ enum NonFixtureComposedBoardValueRule {
 }
 
 impl NonFixtureComposedBoardValueRule {
+    fn from_composition_value_rule(value: &str) -> Option<Self> {
+        match value {
+            "component_material_balance_sum_v0" => Some(Self::MaterialBalanceSum),
+            "component_agency_atom_sum_v0" => Some(Self::AgencyAtomSum),
+            "component_local_move_game_v0" => Some(Self::LocalMoveGame),
+            "component_depth2_local_move_game_v0" => Some(Self::DepthTwoLocalMoveGame),
+            _ => None,
+        }
+    }
+
     fn solver_scope(self) -> &'static str {
         match self {
             Self::MaterialBalanceSum => "composition_board_material_components",
@@ -1021,6 +1086,19 @@ struct ComponentValueEvaluation {
     value: CGTValue,
     recursive_depth: Option<u8>,
     recursive_nodes: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+struct NonFixtureCompositionReplay {
+    exact_values: BTreeMap<String, String>,
+    exact_value_class: ExactValueClass,
+    verifier: &'static str,
+    certificate_kind: &'static str,
+    certificate_digest: String,
+    decomposition_digest: String,
+    composition_digest: String,
+    component_values: BTreeMap<String, String>,
+    result_value_digest: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2266,8 +2344,194 @@ fn try_non_fixture_composed_board_exact_row(
     spec: &NonFixtureComposedBoardSpec<'_>,
 ) -> Result<DatasetLabelRow, String> {
     let board = non_fixture_composed_board(spec);
-    let decomposition = bitmesh::certify_decomposition(&board);
-    let proof = bitmesh::verify_conservative_legal_independence(&board, &decomposition)
+    let replay = replay_non_fixture_composed_board(&board, spec.value_rule)?;
+    let mut exact = ExactLabel::verified(replay.exact_values.clone(), replay.exact_value_class);
+    exact.value.insert(
+        "component_topology_family".to_owned(),
+        spec.topology_family.to_owned(),
+    );
+    exact.value.insert(
+        "composition_spec_source".to_owned(),
+        spec.spec_source.to_owned(),
+    );
+
+    Ok(DatasetLabelRow::exact(
+        spec.row_id,
+        NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.domain_id,
+        DatasetPosition::fen(non_fixture_composed_board_fen(spec)),
+        exact,
+        ExactProvenance {
+            code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
+                .unwrap_or_else(|_| "workspace".to_owned()),
+            generator: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.generator.to_owned(),
+            generator_config_hash: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG
+                .generator_config_hash
+                .to_owned(),
+            random_seed: 0,
+            domain_definition: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG
+                .domain_definition
+                .to_owned(),
+            verifier: replay.verifier.to_owned(),
+            verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
+            certificate: LabelCertificate::composition(
+                replay.certificate_kind,
+                replay.certificate_digest,
+                replay.decomposition_digest,
+                replay.composition_digest,
+                replay.component_values,
+                replay.result_value_digest,
+            ),
+        },
+    ))
+}
+
+fn replay_verify_non_fixture_composed_board_exact_row(
+    row: &DatasetLabelRow,
+    exact: &ExactLabel,
+    provenance: &ExactProvenance,
+    issues: &mut Vec<LabelValidationIssue>,
+) {
+    if row.position.encoding != PositionEncoding::Fen {
+        issues.push(LabelValidationIssue::row(format!(
+            "{} replay requires fen position encoding",
+            row.row_id
+        )));
+        return;
+    }
+    let Some(rule_text) = exact.value.get("composition_value_rule") else {
+        issues.push(LabelValidationIssue::row(format!(
+            "{} exact.value.composition_value_rule is required for replay",
+            row.row_id
+        )));
+        return;
+    };
+    let Some(value_rule) =
+        NonFixtureComposedBoardValueRule::from_composition_value_rule(rule_text.as_str())
+    else {
+        issues.push(LabelValidationIssue::row(format!(
+            "{} unsupported composition_value_rule for replay: {rule_text}",
+            row.row_id
+        )));
+        return;
+    };
+    let board = match board_from_fen_board_part(row.position.text.as_str()) {
+        Ok(board) => board,
+        Err(error) => {
+            issues.push(LabelValidationIssue::row(format!(
+                "{} replay could not parse FEN: {error}",
+                row.row_id
+            )));
+            return;
+        }
+    };
+    let replay = match replay_non_fixture_composed_board(&board, value_rule) {
+        Ok(replay) => replay,
+        Err(error) => {
+            issues.push(LabelValidationIssue::row(format!(
+                "{} replay recomputation failed: {error}",
+                row.row_id
+            )));
+            return;
+        }
+    };
+
+    compare_replay_field(
+        row.row_id.as_str(),
+        "exact.value_class",
+        exact.value_class,
+        replay.exact_value_class,
+        issues,
+    );
+    for (key, expected) in &replay.exact_values {
+        compare_replay_value(
+            row.row_id.as_str(),
+            format!("exact.value.{key}").as_str(),
+            exact.value.get(key),
+            expected,
+            issues,
+        );
+    }
+    for optional_key in [
+        "dyadic_numerator",
+        "dyadic_denominator_power",
+        "solver_depth",
+        "component_recursive_node_counts",
+        "component_recursive_total_nodes",
+        "recursive_leaf_rule",
+    ] {
+        if !replay.exact_values.contains_key(optional_key)
+            && let Some(actual) = exact.value.get(optional_key)
+        {
+            issues.push(LabelValidationIssue::row(format!(
+                "{} exact.value.{optional_key} should be absent under replay, got {actual:?}",
+                row.row_id
+            )));
+        }
+    }
+
+    compare_replay_value(
+        row.row_id.as_str(),
+        "provenance.verifier",
+        Some(&provenance.verifier),
+        replay.verifier,
+        issues,
+    );
+    compare_replay_value(
+        row.row_id.as_str(),
+        "provenance.certificate.kind",
+        Some(&provenance.certificate.kind),
+        replay.certificate_kind,
+        issues,
+    );
+    compare_replay_value(
+        row.row_id.as_str(),
+        "provenance.certificate.digest",
+        Some(&provenance.certificate.digest),
+        &replay.certificate_digest,
+        issues,
+    );
+    let Some(composition) = provenance.certificate.composition.as_deref() else {
+        issues.push(LabelValidationIssue::row(format!(
+            "{} replay requires structured composition certificate",
+            row.row_id
+        )));
+        return;
+    };
+    compare_replay_value(
+        row.row_id.as_str(),
+        "provenance.certificate.decomposition_digest",
+        Some(&composition.decomposition_digest),
+        &replay.decomposition_digest,
+        issues,
+    );
+    compare_replay_value(
+        row.row_id.as_str(),
+        "provenance.certificate.composition_digest",
+        Some(&composition.composition_digest),
+        &replay.composition_digest,
+        issues,
+    );
+    compare_replay_value(
+        row.row_id.as_str(),
+        "provenance.certificate.result_value_digest",
+        Some(&composition.result_value_digest),
+        &replay.result_value_digest,
+        issues,
+    );
+    if composition.component_values != replay.component_values {
+        issues.push(LabelValidationIssue::row(format!(
+            "{} provenance.certificate.component_values replay mismatch: expected {:?}, got {:?}",
+            row.row_id, replay.component_values, composition.component_values
+        )));
+    }
+}
+
+fn replay_non_fixture_composed_board(
+    board: &Board,
+    value_rule: NonFixtureComposedBoardValueRule,
+) -> Result<NonFixtureCompositionReplay, String> {
+    let decomposition = bitmesh::certify_decomposition(board);
+    let proof = bitmesh::verify_conservative_legal_independence(board, &decomposition)
         .map_err(|error| format!("conservative independence proof failed: {error:?}"))?;
     if proof.component_count != 2 {
         return Err(format!(
@@ -2276,6 +2540,7 @@ fn try_non_fixture_composed_board_exact_row(
         ));
     }
     let decomposition_digest = proof.decomposition_digest;
+    let decomposition_digest_text = decomposition_digest.to_string();
 
     let mut components = decomposition.components.iter().collect::<Vec<_>>();
     components.sort_by_key(|component| component.root);
@@ -2294,14 +2559,14 @@ fn try_non_fixture_composed_board_exact_row(
     let mut component_cgt_values = Vec::new();
 
     for component in components {
-        let material_value = component_material_balance(&board, component.active_mask);
+        let material_value = component_material_balance(board, component.active_mask);
         let local_move_counts =
-            component_local_move_counts(&board, component.mask, component.active_mask);
+            component_local_move_counts(board, component.mask, component.active_mask);
         total_white_local_moves += local_move_counts.white;
         total_black_local_moves += local_move_counts.black;
         let component_evaluation = component_cgt_evaluation(
-            spec.value_rule,
-            &board,
+            value_rule,
+            board,
             component.mask,
             component.active_mask,
             material_value,
@@ -2355,118 +2620,125 @@ fn try_non_fixture_composed_board_exact_row(
         .map_err(|error| format!("BMCOMPOSE digest failed: {error:?}"))?
         .to_string();
 
-    let mut exact = ExactLabel::from_thermograph_payload(&result_payload);
-    exact.value.insert(
+    let mut exact_values = thermograph_exact_value_map(&result_payload);
+    exact_values.insert(
         "solver_scope".to_owned(),
-        spec.value_rule.solver_scope().to_owned(),
+        value_rule.solver_scope().to_owned(),
     );
-    exact.value.insert(
+    exact_values.insert(
         "composition_value_rule".to_owned(),
-        spec.value_rule.composition_value_rule().to_owned(),
+        value_rule.composition_value_rule().to_owned(),
     );
-    exact.value.insert(
-        "component_topology_family".to_owned(),
-        spec.topology_family.to_owned(),
-    );
-    exact.value.insert(
-        "composition_spec_source".to_owned(),
-        spec.spec_source.to_owned(),
-    );
-    exact
-        .value
-        .insert("proof_kind".to_owned(), proof.proof_kind.to_owned());
-    exact.value.insert(
+    exact_values.insert("proof_kind".to_owned(), proof.proof_kind.to_owned());
+    exact_values.insert(
         "component_count".to_owned(),
         proof.component_count.to_string(),
     );
-    exact.value.insert(
+    exact_values.insert(
         "component_roots".to_owned(),
         component_root_summaries.join(","),
     );
-    exact.value.insert(
+    exact_values.insert(
         "component_values".to_owned(),
         component_value_summaries.join(","),
     );
-    exact.value.insert(
+    exact_values.insert(
         "component_value_classes".to_owned(),
         component_value_class_summaries.join(","),
     );
-    exact.value.insert(
+    exact_values.insert(
         "component_material_balances".to_owned(),
         component_material_summaries.join(","),
     );
-    exact.value.insert(
+    exact_values.insert(
         "component_local_move_counts".to_owned(),
         component_local_move_summaries.join(","),
     );
-    exact.value.insert(
+    exact_values.insert(
         "component_local_move_totals".to_owned(),
         format!("white:{total_white_local_moves},black:{total_black_local_moves}"),
     );
-    exact.value.insert(
+    exact_values.insert(
         "component_local_move_imbalance".to_owned(),
         (i64::try_from(total_white_local_moves).expect("local move count fits i64")
             - i64::try_from(total_black_local_moves).expect("local move count fits i64"))
         .to_string(),
     );
     if !component_recursive_node_summaries.is_empty() {
-        exact.value.insert(
+        exact_values.insert(
             "solver_depth".to_owned(),
             COMPONENT_DEPTH_TWO_LOCAL_MOVE_DEPTH.to_string(),
         );
-        exact.value.insert(
+        exact_values.insert(
             "component_recursive_node_counts".to_owned(),
             component_recursive_node_summaries.join(","),
         );
-        exact.value.insert(
+        exact_values.insert(
             "component_recursive_total_nodes".to_owned(),
             total_recursive_nodes.to_string(),
         );
-        exact.value.insert(
+        exact_values.insert(
             "recursive_leaf_rule".to_owned(),
             "component_material_balance_at_depth_cutoff_or_no_moves_v0".to_owned(),
         );
     }
-    exact.value.insert(
+    exact_values.insert(
         "result_digest_v1_sha256".to_owned(),
         result_value.digest_v1_sha256(),
     );
 
-    Ok(DatasetLabelRow::exact(
-        spec.row_id,
-        NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.domain_id,
-        DatasetPosition::fen(non_fixture_composed_board_fen(spec)),
-        exact,
-        ExactProvenance {
-            code_commit: std::env::var("ASTRALBASE_CODE_COMMIT")
-                .unwrap_or_else(|_| "workspace".to_owned()),
-            generator: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.generator.to_owned(),
-            generator_config_hash: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG
-                .generator_config_hash
-                .to_owned(),
-            random_seed: 0,
-            domain_definition: NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG
-                .domain_definition
-                .to_owned(),
-            verifier: spec.value_rule.verifier().to_owned(),
-            verifier_version: env!("CARGO_PKG_VERSION").to_owned(),
-            certificate: LabelCertificate::composition(
-                spec.value_rule.certificate_kind(),
-                format!(
-                    "bitmesh:{};proof:{};rule:{};bmcompose:{};thermograph:{}",
-                    decomposition_digest,
-                    proof.proof_kind,
-                    spec.value_rule.composition_value_rule(),
-                    composition_digest,
-                    result_payload.digest
-                ),
-                decomposition_digest.to_string(),
-                composition_digest,
-                component_values,
-                result_payload.digest,
-            ),
-        },
-    ))
+    Ok(NonFixtureCompositionReplay {
+        exact_values,
+        exact_value_class: result_payload.value_class.into(),
+        verifier: value_rule.verifier(),
+        certificate_kind: value_rule.certificate_kind(),
+        certificate_digest: format!(
+            "bitmesh:{};proof:{};rule:{};bmcompose:{};thermograph:{}",
+            decomposition_digest_text,
+            proof.proof_kind,
+            value_rule.composition_value_rule(),
+            composition_digest,
+            result_payload.digest
+        ),
+        decomposition_digest: decomposition_digest_text,
+        composition_digest,
+        component_values,
+        result_value_digest: result_payload.digest,
+    })
+}
+
+fn compare_replay_value(
+    row_id: &str,
+    field: &str,
+    actual: Option<&String>,
+    expected: &str,
+    issues: &mut Vec<LabelValidationIssue>,
+) {
+    match actual {
+        Some(actual) if actual == expected => {}
+        Some(actual) => issues.push(LabelValidationIssue::row(format!(
+            "{row_id} {field} replay mismatch: expected {expected:?}, got {actual:?}"
+        ))),
+        None => issues.push(LabelValidationIssue::row(format!(
+            "{row_id} {field} missing under replay; expected {expected:?}"
+        ))),
+    }
+}
+
+fn compare_replay_field<T>(
+    row_id: &str,
+    field: &str,
+    actual: T,
+    expected: T,
+    issues: &mut Vec<LabelValidationIssue>,
+) where
+    T: std::fmt::Debug + PartialEq,
+{
+    if actual != expected {
+        issues.push(LabelValidationIssue::row(format!(
+            "{row_id} {field} replay mismatch: expected {expected:?}, got {actual:?}"
+        )));
+    }
 }
 
 fn non_fixture_composed_board(spec: &NonFixtureComposedBoardSpec<'_>) -> Board {
@@ -2869,6 +3141,14 @@ fn board_from_fen(fen: &str) -> Result<Board, String> {
         .into_position(CastlingMode::Standard)
         .map_err(|error| error.to_string())?;
     Ok(position.board().clone())
+}
+
+fn board_from_fen_board_part(fen: &str) -> Result<Board, String> {
+    let board_part = fen
+        .split_whitespace()
+        .next()
+        .ok_or_else(|| "missing board FEN field".to_owned())?;
+    Board::from_str(board_part).map_err(|error| error.to_string())
 }
 
 fn terminal_exact_row(

@@ -388,3 +388,50 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
         }
     }
 }
+
+#[test]
+fn non_fixture_composed_domain_jsonl_replays_composition_certificates() {
+    let jsonl = dataset_label::non_fixture_composed_domain_shard_jsonl(
+        dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT,
+    )
+    .unwrap();
+
+    let report = dataset_label::replay_verify_non_fixture_composed_domain_jsonl(&jsonl).unwrap();
+
+    assert_eq!(report.row_count, 20);
+    assert_eq!(report.checked_exact_rows, 17);
+    assert_eq!(report.skipped_rejected_rows, 3);
+    assert_eq!(report.skipped_non_target_rows, 0);
+}
+
+#[test]
+fn non_fixture_composed_domain_replay_rejects_stale_recomputable_fields() {
+    let mut rows = dataset_label::non_fixture_composed_domain_shard(
+        dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT,
+    );
+    let exact = rows
+        .iter_mut()
+        .find_map(|row| match &mut row.label {
+            LabelPayload::Exact { exact, .. }
+                if row.domain == dataset_label::NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID =>
+            {
+                Some(exact)
+            }
+            _ => None,
+        })
+        .expect("non-fixture shard has exact composed-board rows");
+    exact.value.insert(
+        "component_roots".to_owned(),
+        "stale-root-summary".to_owned(),
+    );
+
+    let jsonl = dataset_label::serialize_jsonl(&rows).unwrap();
+    let issues =
+        dataset_label::replay_verify_non_fixture_composed_domain_jsonl(&jsonl).unwrap_err();
+
+    assert!(issues.iter().any(|issue| {
+        issue
+            .message
+            .contains("exact.value.component_roots replay mismatch")
+    }));
+}
