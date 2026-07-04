@@ -73,7 +73,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     && row.label_kind() == LabelKind::Exact
             )
             .count(),
-        4
+        5
     );
     assert_eq!(
         rows.iter()
@@ -101,6 +101,23 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
             .count(),
         1
     );
+    assert_eq!(
+        rows.iter()
+            .filter(|row| {
+                matches!(
+                    &row.label,
+                    LabelPayload::Exact { exact, .. }
+                        if exact
+                            .value
+                            .get("composition_value_rule")
+                            .map(String::as_str)
+                            == Some("component_local_move_game_v0")
+                            && exact.value_class == dataset_label::ExactValueClass::GameTree
+                )
+            })
+            .count(),
+        1
+    );
 
     for row in rows {
         match row.label {
@@ -117,6 +134,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     composition_value_rule,
                     Some("component_material_balance_sum_v0")
                         | Some("component_agency_atom_sum_v0")
+                        | Some("component_local_move_game_v0")
                 ));
                 if composition_value_rule == Some("component_agency_atom_sum_v0") {
                     assert_eq!(exact.value_class, dataset_label::ExactValueClass::GameTree);
@@ -126,6 +144,15 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                         .expect("agency atom row records component value classes");
                     assert!(component_value_classes.contains("=up"));
                     assert!(component_value_classes.contains("=down"));
+                }
+                if composition_value_rule == Some("component_local_move_game_v0") {
+                    assert_eq!(exact.value_class, dataset_label::ExactValueClass::GameTree);
+                    let component_local_move_counts = exact
+                        .value
+                        .get("component_local_move_counts")
+                        .expect("local move row records component move counts");
+                    assert!(component_local_move_counts.contains("white:"));
+                    assert!(component_local_move_counts.contains("black:"));
                 }
                 assert_eq!(
                     exact.value.get("proof_kind").map(String::as_str),

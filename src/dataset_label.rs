@@ -19,7 +19,7 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
-pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 7;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 8;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -943,6 +943,7 @@ struct NonFixtureComposedBoardSpec {
 enum NonFixtureComposedBoardValueRule {
     MaterialBalanceSum,
     AgencyAtomSum,
+    LocalMoveGame,
 }
 
 impl NonFixtureComposedBoardValueRule {
@@ -950,6 +951,7 @@ impl NonFixtureComposedBoardValueRule {
         match self {
             Self::MaterialBalanceSum => "composition_board_material_components",
             Self::AgencyAtomSum => "composition_board_agency_atoms",
+            Self::LocalMoveGame => "composition_board_component_local_moves",
         }
     }
 
@@ -957,6 +959,7 @@ impl NonFixtureComposedBoardValueRule {
         match self {
             Self::MaterialBalanceSum => "component_material_balance_sum_v0",
             Self::AgencyAtomSum => "component_agency_atom_sum_v0",
+            Self::LocalMoveGame => "component_local_move_game_v0",
         }
     }
 
@@ -964,6 +967,7 @@ impl NonFixtureComposedBoardValueRule {
         match self {
             Self::MaterialBalanceSum => "bitmesh_conservative_board_material_bmcompose_verifier",
             Self::AgencyAtomSum => "bitmesh_conservative_board_agency_atom_bmcompose_verifier",
+            Self::LocalMoveGame => "bitmesh_conservative_component_local_move_bmcompose_verifier",
         }
     }
 
@@ -975,8 +979,17 @@ impl NonFixtureComposedBoardValueRule {
             Self::AgencyAtomSum => {
                 "bitmesh-bmcompose-v1+thermograph-exact-value+board-agency-atom-v0"
             }
+            Self::LocalMoveGame => {
+                "bitmesh-bmcompose-v1+thermograph-exact-value+component-local-move-v0"
+            }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ComponentLocalMoveCounts {
+    white: usize,
+    black: usize,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1204,7 +1217,7 @@ const NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES: [NonFixtureComposedDomainCandidate
     },
 ];
 
-const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 4] = [
+const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 5] = [
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-001",
         active_pieces: &[(Square::A1, 'N'), (Square::H8, 'n'), (Square::G7, 'p')],
@@ -1234,6 +1247,17 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 4] =
         active_pieces: &[(Square::A1, 'N'), (Square::A2, 'P'), (Square::H8, 'n')],
         fullmove_number: 104,
         value_rule: NonFixtureComposedBoardValueRule::AgencyAtomSum,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-005",
+        active_pieces: &[
+            (Square::A1, 'N'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::H8, 'n'),
+        ],
+        fullmove_number: 105,
+        value_rule: NonFixtureComposedBoardValueRule::LocalMoveGame,
     },
 ];
 
@@ -1574,11 +1598,15 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
     let mut component_value_summaries = Vec::new();
     let mut component_value_class_summaries = Vec::new();
     let mut component_material_summaries = Vec::new();
+    let mut component_local_move_summaries = Vec::new();
     let mut component_cgt_values = Vec::new();
 
     for component in components {
         let material_value = component_material_balance(&board, component.active_mask);
-        let component_value = component_cgt_value(spec.value_rule, material_value);
+        let local_move_counts =
+            component_local_move_counts(&board, component.mask, component.active_mask);
+        let component_value =
+            component_cgt_value(spec.value_rule, material_value, local_move_counts);
         let payload = component_value.exact_value_payload();
         component_values.insert(component.root.to_string(), payload.digest.clone());
         bmcompose_component_values.push(CompositionComponentValue {
@@ -1596,6 +1624,10 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
             payload.value_class.as_str()
         ));
         component_material_summaries.push(format!("{}={material_value}", component.root));
+        component_local_move_summaries.push(format!(
+            "{}=white:{},black:{}",
+            component.root, local_move_counts.white, local_move_counts.black
+        ));
         component_cgt_values.push(component_value);
     }
 
@@ -1645,6 +1677,10 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
     exact.value.insert(
         "component_material_balances".to_owned(),
         component_material_summaries.join(","),
+    );
+    exact.value.insert(
+        "component_local_move_counts".to_owned(),
+        component_local_move_summaries.join(","),
     );
     exact.value.insert(
         "result_digest_v1_sha256".to_owned(),
@@ -1742,11 +1778,15 @@ fn component_material_balance(board: &Board, active_mask: shakmaty::Bitboard) ->
 fn component_cgt_value(
     value_rule: NonFixtureComposedBoardValueRule,
     material_balance: i32,
+    local_move_counts: ComponentLocalMoveCounts,
 ) -> CGTValue {
     match value_rule {
         NonFixtureComposedBoardValueRule::MaterialBalanceSum => CGTValue::Integer(material_balance),
         NonFixtureComposedBoardValueRule::AgencyAtomSum => {
             component_agency_atom_value(material_balance)
+        }
+        NonFixtureComposedBoardValueRule::LocalMoveGame => {
+            component_local_move_game_value(local_move_counts)
         }
     }
 }
@@ -1757,6 +1797,101 @@ fn component_agency_atom_value(material_balance: i32) -> CGTValue {
         std::cmp::Ordering::Equal => CGTValue::Star,
         std::cmp::Ordering::Less => CGTValue::Down,
     }
+}
+
+fn component_local_move_game_value(local_move_counts: ComponentLocalMoveCounts) -> CGTValue {
+    let left = if local_move_counts.white == 0 {
+        Vec::new()
+    } else {
+        vec![CGTValue::Integer(
+            i32::try_from(local_move_counts.white).expect("component move count fits i32"),
+        )]
+    };
+    let right = if local_move_counts.black == 0 {
+        Vec::new()
+    } else {
+        vec![CGTValue::Integer(
+            -i32::try_from(local_move_counts.black).expect("component move count fits i32"),
+        )]
+    };
+    CGTValue::GameTree { left, right }
+}
+
+fn component_local_move_counts(
+    board: &Board,
+    component_mask: shakmaty::Bitboard,
+    active_mask: shakmaty::Bitboard,
+) -> ComponentLocalMoveCounts {
+    ComponentLocalMoveCounts {
+        white: component_local_move_count(board, component_mask, active_mask, Color::White),
+        black: component_local_move_count(board, component_mask, active_mask, Color::Black),
+    }
+}
+
+fn component_local_move_count(
+    board: &Board,
+    component_mask: shakmaty::Bitboard,
+    active_mask: shakmaty::Bitboard,
+    color: Color,
+) -> usize {
+    let occupied = board.occupied();
+    let mut count = 0;
+
+    for from in active_mask {
+        let piece = board
+            .piece_at(from)
+            .expect("component active mask square must contain a piece");
+        if piece.color != color {
+            continue;
+        }
+
+        if piece.role == shakmaty::Role::Pawn {
+            count += (shakmaty::attacks::pawn_attacks(color, from)
+                & board.by_color(!color)
+                & component_mask)
+                .count();
+            count += component_local_pawn_quiet_move_count(board, component_mask, from, color);
+        } else {
+            count += (shakmaty::attacks::attacks(from, piece, occupied)
+                & !board.by_color(color)
+                & component_mask)
+                .count();
+        }
+    }
+
+    count
+}
+
+fn component_local_pawn_quiet_move_count(
+    board: &Board,
+    component_mask: shakmaty::Bitboard,
+    from: Square,
+    color: Color,
+) -> usize {
+    let occupied = board.occupied();
+    let forward_offset = if color == Color::White { 8 } else { -8 };
+    let start_rank = if color == Color::White {
+        shakmaty::Rank::Second
+    } else {
+        shakmaty::Rank::Seventh
+    };
+
+    let Some(one_step) = from.offset(forward_offset) else {
+        return 0;
+    };
+    if occupied.contains(one_step) || !component_mask.contains(one_step) {
+        return 0;
+    }
+
+    let mut count = 1;
+    if from.rank() == start_rank
+        && let Some(two_step) = one_step.offset(forward_offset)
+        && !occupied.contains(two_step)
+        && component_mask.contains(two_step)
+    {
+        count += 1;
+    }
+    count
 }
 
 fn material_value(role: shakmaty::Role) -> i32 {
@@ -2695,6 +2830,7 @@ mod tests {
                         composition_value_rule,
                         Some("component_material_balance_sum_v0")
                             | Some("component_agency_atom_sum_v0")
+                            | Some("component_local_move_game_v0")
                     ));
                     assert_ne!(
                         composition_value_rule,
@@ -2726,6 +2862,23 @@ mod tests {
                             assert_eq!(
                                 provenance.verifier,
                                 "bitmesh_conservative_board_agency_atom_bmcompose_verifier"
+                            );
+                        }
+                        Some("component_local_move_game_v0") => {
+                            assert_eq!(
+                                exact.value.get("solver_scope").map(String::as_str),
+                                Some("composition_board_component_local_moves")
+                            );
+                            assert_eq!(exact.value_class, ExactValueClass::GameTree);
+                            let component_local_move_counts = exact
+                                .value
+                                .get("component_local_move_counts")
+                                .expect("local move row records component move counts");
+                            assert!(component_local_move_counts.contains("white:"));
+                            assert!(component_local_move_counts.contains("black:"));
+                            assert_eq!(
+                                provenance.verifier,
+                                "bitmesh_conservative_component_local_move_bmcompose_verifier"
                             );
                         }
                         _ => unreachable!("validated composition value rule"),
