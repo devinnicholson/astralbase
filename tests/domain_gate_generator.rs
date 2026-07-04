@@ -435,3 +435,21 @@ fn non_fixture_composed_domain_replay_rejects_stale_recomputable_fields() {
             .contains("exact.value.component_roots replay mismatch")
     }));
 }
+
+#[test]
+fn generated_depth_two_profile_search_reports_current_capacity() {
+    let report = dataset_label::generated_depth_two_profile_search_report(10);
+
+    assert_eq!(report.rows_per_family_target, 10);
+    assert_eq!(report.white_profile_count, 21);
+    assert_eq!(report.black_profile_count, 14);
+    assert_eq!(report.selected_row_count, 8);
+    assert_eq!(
+        report.selected_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 3),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 3),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2),
+        ])
+    );
+}
