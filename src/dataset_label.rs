@@ -772,10 +772,16 @@ pub fn non_fixture_composed_domain_shard(limit: usize) -> Vec<DatasetLabelRow> {
                 non_fixture_composed_domain_rejected_row(index + 1, candidate)
             }),
     );
-    rows.extend(generated_depth_two_composed_board_exact_rows(
-        &rows,
-        GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY,
-    ));
+    if rows.len() < limit {
+        let requested_generated_rows = limit.saturating_sub(rows.len());
+        let generated_topology_family_count = generated_depth_two_topology_families().len();
+        let requested_rows_per_family =
+            requested_generated_rows.div_ceil(generated_topology_family_count);
+        rows.extend(generated_depth_two_composed_board_exact_rows(
+            &rows,
+            requested_rows_per_family.min(GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY),
+        ));
+    }
     rows.truncate(limit);
     rows
 }
@@ -1047,6 +1053,14 @@ const GENERATED_DEPTH_TWO_PROFILE_PAIR_PLAN: [(usize, usize, &str); 6] = [
     (13, 9, DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY),
     (14, 6, DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY),
 ];
+
+fn generated_depth_two_topology_families() -> [&'static str; 3] {
+    [
+        DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
+        DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY,
+        DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY,
+    ]
+}
 
 #[derive(Clone, Debug)]
 struct GeneratedDepthTwoComponentProfile {
@@ -1439,11 +1453,7 @@ fn generated_depth_two_composed_board_exact_rows(
         generated_depth_two_component_profiles(generated_white_component_patterns());
     let black_profiles =
         generated_depth_two_component_profiles(generated_black_component_patterns());
-    let topology_families = [
-        DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
-        DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY,
-        DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY,
-    ];
+    let topology_families = generated_depth_two_topology_families();
 
     let mut rows = Vec::with_capacity(rows_per_family * topology_families.len());
     let mut seen_positions = BTreeSet::new();
