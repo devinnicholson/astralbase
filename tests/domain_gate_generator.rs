@@ -405,6 +405,100 @@ fn non_fixture_composed_domain_jsonl_replays_composition_certificates() {
 }
 
 #[test]
+fn expanded_non_fixture_composed_domain_jsonl_has_profiled_rows_per_topology() {
+    let jsonl = dataset_label::expanded_non_fixture_composed_domain_shard_jsonl(
+        dataset_label::DEFAULT_EXPANDED_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY,
+    )
+    .unwrap();
+    let rows = dataset_label::parse_and_validate_jsonl(&jsonl).unwrap();
+
+    assert_eq!(
+        rows.len(),
+        dataset_label::DEFAULT_EXPANDED_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT
+    );
+    assert_eq!(
+        rows.iter()
+            .filter(
+                |row| row.domain == dataset_label::NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID
+                    && row.label_kind() == LabelKind::Exact
+            )
+            .count(),
+        41
+    );
+    assert_eq!(
+        rows.iter()
+            .filter(
+                |row| row.domain == dataset_label::NON_FIXTURE_COMPOSED_DOMAIN_ID
+                    && row.label_kind() == LabelKind::Rejected
+            )
+            .count(),
+        3
+    );
+
+    let spec_source_counts = rows
+        .iter()
+        .filter_map(|row| match &row.label {
+            LabelPayload::Exact { exact, .. } => {
+                exact.value.get("composition_spec_source").cloned()
+            }
+            _ => None,
+        })
+        .fold(
+            std::collections::BTreeMap::<String, usize>::new(),
+            |mut counts, source| {
+                *counts.entry(source).or_default() += 1;
+                counts
+            },
+        );
+    assert_eq!(
+        spec_source_counts,
+        std::collections::BTreeMap::from([
+            ("curated_non_fixture_board_spec_v0".to_owned(), 11),
+            ("profiled_depth2_component_pair_generator_v0".to_owned(), 30),
+        ])
+    );
+
+    let generated_depth_two_family_counts = rows
+        .iter()
+        .filter_map(|row| match &row.label {
+            LabelPayload::Exact { exact, .. }
+                if exact
+                    .value
+                    .get("composition_spec_source")
+                    .map(String::as_str)
+                    == Some("profiled_depth2_component_pair_generator_v0") =>
+            {
+                exact.value.get("component_topology_family").cloned()
+            }
+            _ => None,
+        })
+        .fold(
+            std::collections::BTreeMap::<String, usize>::new(),
+            |mut counts, family| {
+                *counts.entry(family).or_default() += 1;
+                counts
+            },
+        );
+    assert_eq!(
+        generated_depth_two_family_counts,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                10
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 10),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 10),
+        ])
+    );
+
+    let report = dataset_label::replay_verify_non_fixture_composed_domain_jsonl(&jsonl).unwrap();
+    assert_eq!(report.row_count, 44);
+    assert_eq!(report.checked_exact_rows, 41);
+    assert_eq!(report.skipped_rejected_rows, 3);
+    assert_eq!(report.skipped_non_target_rows, 0);
+}
+
+#[test]
 fn non_fixture_composed_domain_replay_rejects_stale_recomputable_fields() {
     let mut rows = dataset_label::non_fixture_composed_domain_shard(
         dataset_label::DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT,
@@ -441,18 +535,15 @@ fn generated_depth_two_profile_search_reports_current_capacity() {
     let report = dataset_label::generated_depth_two_profile_search_report(10);
 
     assert_eq!(report.rows_per_family_target, 10);
-    assert_eq!(report.left_profile_count, 234);
-    assert_eq!(report.right_profile_count, 253);
-    assert_eq!(report.selected_row_count, 30);
+    assert_eq!(report.left_profile_count, 14);
+    assert_eq!(report.right_profile_count, 13);
+    assert_eq!(report.selected_row_count, 7);
     assert_eq!(
         report.selected_counts_by_topology_family,
         std::collections::BTreeMap::from([
-            (
-                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
-                10
-            ),
-            ("dfile_two_component_depth2_local_move_v0".to_owned(), 10),
-            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 10),
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 2),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 3),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2),
         ])
     );
 }

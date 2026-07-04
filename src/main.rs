@@ -62,6 +62,15 @@ fn main() {
             );
             return;
         }
+        Some("--expanded-non-fixture-composed-domain-shard") => {
+            let rows_per_family = parse_expanded_non_fixture_composed_domain_rows(args);
+            print!(
+                "{}",
+                dataset_label::expanded_non_fixture_composed_domain_shard_jsonl(rows_per_family)
+                    .expect("expanded non-fixture composed-domain shard must serialize")
+            );
+            return;
+        }
         Some("--replay-non-fixture-composed-domain-shard") => {
             let path = parse_replay_non_fixture_composed_domain_path(args);
             let input = std::fs::read_to_string(path.as_str()).unwrap_or_else(|error| {
@@ -129,6 +138,7 @@ Commands:\n\
   --expanded-family-frontier-label-shard [--limit-per-family N]\n\
   --composition-hard-target-shard [--limit N]\n\
   --non-fixture-composed-domain-shard [--limit N]\n\
+  --expanded-non-fixture-composed-domain-shard [--rows-per-family N]\n\
   --replay-non-fixture-composed-domain-shard PATH\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
   --help\n"
@@ -136,15 +146,33 @@ Commands:\n\
 }
 
 fn parse_generated_depth_two_profile_search_rows(mut args: impl Iterator<Item = String>) -> usize {
+    parse_rows_per_family_arg(&mut args, "--generated-depth-two-profile-search", 10)
+}
+
+fn parse_expanded_non_fixture_composed_domain_rows(
+    mut args: impl Iterator<Item = String>,
+) -> usize {
+    parse_rows_per_family_arg(
+        &mut args,
+        "--expanded-non-fixture-composed-domain-shard",
+        dataset_label::DEFAULT_EXPANDED_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY,
+    )
+}
+
+fn parse_rows_per_family_arg(
+    args: &mut impl Iterator<Item = String>,
+    command: &str,
+    default: usize,
+) -> usize {
     match args.next().as_deref() {
-        None => 10,
+        None => default,
         Some("--rows-per-family") => {
             let value = args.next().unwrap_or_else(|| {
                 eprintln!("--rows-per-family requires a positive integer");
                 std::process::exit(2);
             });
             if let Some(extra) = args.next() {
-                eprintln!("unsupported argument for --generated-depth-two-profile-search: {extra}");
+                eprintln!("unsupported argument for {command}: {extra}");
                 std::process::exit(2);
             }
             value.parse::<usize>().unwrap_or_else(|error| {
@@ -153,7 +181,7 @@ fn parse_generated_depth_two_profile_search_rows(mut args: impl Iterator<Item = 
             })
         }
         Some(arg) => {
-            eprintln!("unsupported argument for --generated-depth-two-profile-search: {arg}");
+            eprintln!("unsupported argument for {command}: {arg}");
             std::process::exit(2);
         }
     }

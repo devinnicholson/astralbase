@@ -27,6 +27,14 @@ Astralbase is implemented as a Rust library with a small demo binary. The librar
 cargo run --release
 ```
 
+Dataset shard commands used by the Partizan research harness:
+
+```bash
+cargo run --quiet -- --non-fixture-composed-domain-shard
+cargo run --quiet -- --expanded-non-fixture-composed-domain-shard --rows-per-family 10
+cargo run --quiet -- --replay-non-fixture-composed-domain-shard /tmp/astralbase-w22-expanded-composition.jsonl
+```
+
 ## Research Context
 
 This engine is the core dataset generator for the Partizan research project, aimed at proving that deep reinforcement learning models can learn game-theoretic representations when provided with combinatorial ground-truth data.
