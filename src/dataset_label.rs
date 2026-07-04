@@ -19,7 +19,7 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
-pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 11;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 14;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -1020,6 +1020,9 @@ const MATERIAL_BALANCE_TOPOLOGY_FAMILY: &str = "dfile_two_component_material_bal
 const AGENCY_ATOM_TOPOLOGY_FAMILY: &str = "dfile_two_component_agency_atom_v0";
 const LOCAL_MOVE_TOPOLOGY_FAMILY: &str = "dfile_two_component_local_move_v0";
 const DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_local_move_v0";
+const DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY: &str =
+    "dfile_two_component_depth2_asymmetric_fan_v0";
+const DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_pawn_phalanx_v0";
 
 #[derive(Clone, Copy, Debug)]
 enum CompositionFixtureTopology {
@@ -1246,7 +1249,7 @@ const NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES: [NonFixtureComposedDomainCandidate
     },
 ];
 
-const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 8] = [
+const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 11] = [
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-001",
         active_pieces: &[(Square::A1, 'N'), (Square::H8, 'n'), (Square::G7, 'p')],
@@ -1317,7 +1320,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 8] =
         ],
         fullmove_number: 107,
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
-        topology_family: DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
+        topology_family: DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-008",
@@ -1333,7 +1336,55 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 8] =
         ],
         fullmove_number: 108,
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+        topology_family: DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-009",
+        active_pieces: &[
+            (Square::A1, 'N'),
+            (Square::B1, 'B'),
+            (Square::C2, 'P'),
+            (Square::H8, 'n'),
+            (Square::G8, 'b'),
+            (Square::F7, 'p'),
+        ],
+        fullmove_number: 109,
+        value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
         topology_family: DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-010",
+        active_pieces: &[
+            (Square::A1, 'N'),
+            (Square::B1, 'B'),
+            (Square::A2, 'P'),
+            (Square::C2, 'P'),
+            (Square::H8, 'n'),
+            (Square::G8, 'b'),
+            (Square::H7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        fullmove_number: 110,
+        value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+        topology_family: DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-011",
+        active_pieces: &[
+            (Square::A1, 'N'),
+            (Square::B1, 'B'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+            (Square::H8, 'n'),
+            (Square::G8, 'b'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        fullmove_number: 111,
+        value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+        topology_family: DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY,
     },
 ];
 
@@ -1676,6 +1727,8 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
     let mut component_material_summaries = Vec::new();
     let mut component_local_move_summaries = Vec::new();
     let mut component_recursive_node_summaries = Vec::new();
+    let mut total_white_local_moves = 0usize;
+    let mut total_black_local_moves = 0usize;
     let mut total_recursive_nodes = 0usize;
     let mut component_cgt_values = Vec::new();
 
@@ -1683,6 +1736,8 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
         let material_value = component_material_balance(&board, component.active_mask);
         let local_move_counts =
             component_local_move_counts(&board, component.mask, component.active_mask);
+        total_white_local_moves += local_move_counts.white;
+        total_black_local_moves += local_move_counts.black;
         let component_evaluation = component_cgt_evaluation(
             spec.value_rule,
             &board,
@@ -1778,6 +1833,16 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
     exact.value.insert(
         "component_local_move_counts".to_owned(),
         component_local_move_summaries.join(","),
+    );
+    exact.value.insert(
+        "component_local_move_totals".to_owned(),
+        format!("white:{total_white_local_moves},black:{total_black_local_moves}"),
+    );
+    exact.value.insert(
+        "component_local_move_imbalance".to_owned(),
+        (i64::try_from(total_white_local_moves).expect("local move count fits i64")
+            - i64::try_from(total_black_local_moves).expect("local move count fits i64"))
+        .to_string(),
     );
     if !component_recursive_node_summaries.is_empty() {
         exact.value.insert(
@@ -3114,6 +3179,21 @@ mod tests {
                             .get("component_topology_family")
                             .is_some_and(|family| !family.is_empty())
                     );
+                    assert!(
+                        exact
+                            .value
+                            .get("component_local_move_totals")
+                            .is_some_and(
+                                |totals| totals.starts_with("white:") && totals.contains(",black:")
+                            )
+                    );
+                    assert!(
+                        exact
+                            .value
+                            .get("component_local_move_imbalance")
+                            .and_then(|imbalance| imbalance.parse::<i64>().ok())
+                            .is_some()
+                    );
                     assert!(matches!(
                         composition_value_rule,
                         Some("component_material_balance_sum_v0")
@@ -3176,17 +3256,19 @@ mod tests {
                                 Some("composition_board_component_depth2_local_moves")
                             );
                             assert_eq!(
+                                exact.value.get("solver_depth").map(String::as_str),
+                                Some("2")
+                            );
+                            assert!(matches!(
                                 exact
                                     .value
                                     .get("component_topology_family")
                                     .map(String::as_str),
                                 Some(DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY)
-                            );
+                                    | Some(DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY)
+                                    | Some(DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY)
+                            ));
                             assert_eq!(exact.value_class, ExactValueClass::GameTree);
-                            assert_eq!(
-                                exact.value.get("solver_depth").map(String::as_str),
-                                Some("2")
-                            );
                             assert_eq!(
                                 exact.value.get("recursive_leaf_rule").map(String::as_str),
                                 Some("component_material_balance_at_depth_cutoff_or_no_moves_v0")
