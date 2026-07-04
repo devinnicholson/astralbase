@@ -73,7 +73,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     && row.label_kind() == LabelKind::Exact
             )
             .count(),
-        11
+        13
     );
     assert_eq!(
         rows.iter()
@@ -133,7 +133,18 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                 )
             })
             .count(),
-        6
+        8
+    );
+    assert_eq!(
+        rows.iter()
+            .filter(|row| {
+                row.row_id.starts_with(
+                    dataset_label::NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix,
+                ) && row.row_id.as_str() >= "astralbase-w18-non-fixture-composed-board-012"
+                    && row.label_kind() == LabelKind::Exact
+            })
+            .count(),
+        2
     );
     let depth_two_family_counts = rows
         .iter()
@@ -159,8 +170,8 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
     assert_eq!(
         depth_two_family_counts,
         std::collections::BTreeMap::from([
-            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 2,),
-            ("dfile_two_component_depth2_local_move_v0".to_owned(), 2),
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 3,),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 3),
             ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2,),
         ])
     );
@@ -251,7 +262,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                             .value
                             .get("component_recursive_total_nodes")
                             .and_then(|nodes| nodes.parse::<usize>().ok())
-                            .is_some_and(|nodes| nodes > 2)
+                            .is_some_and(|nodes| nodes > 2 && nodes <= 1_000)
                     );
                 }
                 assert_eq!(

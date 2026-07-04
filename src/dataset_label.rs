@@ -9,7 +9,10 @@ use bitmesh::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use shakmaty::{Board, CastlingMode, Chess, Color, Position, Square, fen::Fen};
-use std::{collections::BTreeMap, str::FromStr};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    str::FromStr,
+};
 use thermograph::{CGTValue, ExactValuePayload as ThermographExactValuePayload};
 
 pub const DATASET_LABEL_SCHEMA_VERSION: &str = "partizan.dataset_label.v0";
@@ -19,7 +22,7 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
-pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 14;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 16;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -769,6 +772,10 @@ pub fn non_fixture_composed_domain_shard(limit: usize) -> Vec<DatasetLabelRow> {
                 non_fixture_composed_domain_rejected_row(index + 1, candidate)
             }),
     );
+    rows.extend(generated_depth_two_composed_board_exact_rows(
+        &rows,
+        GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY,
+    ));
     rows.truncate(limit);
     rows
 }
@@ -932,9 +939,9 @@ struct NonFixtureComposedDomainCandidate {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct NonFixtureComposedBoardSpec {
-    row_id: &'static str,
-    active_pieces: &'static [(Square, char)],
+struct NonFixtureComposedBoardSpec<'a> {
+    row_id: &'a str,
+    active_pieces: &'a [(Square, char)],
     fullmove_number: u32,
     value_rule: NonFixtureComposedBoardValueRule,
     topology_family: &'static str,
@@ -1023,6 +1030,10 @@ const DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_l
 const DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY: &str =
     "dfile_two_component_depth2_asymmetric_fan_v0";
 const DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_pawn_phalanx_v0";
+const GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY: usize = 2;
+const GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES: usize = 1_000;
+const GENERATED_DEPTH_TWO_START_FULLMOVE: u32 = 200;
+const GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT: usize = 24;
 
 #[derive(Clone, Copy, Debug)]
 enum CompositionFixtureTopology {
@@ -1249,7 +1260,7 @@ const NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES: [NonFixtureComposedDomainCandidate
     },
 ];
 
-const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 11] = [
+const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec<'static>; 11] = [
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-001",
         active_pieces: &[(Square::A1, 'N'), (Square::H8, 'n'), (Square::G7, 'p')],
@@ -1387,6 +1398,378 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 11] 
         topology_family: DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY,
     },
 ];
+
+fn generated_depth_two_composed_board_exact_rows(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family: usize,
+) -> Vec<DatasetLabelRow> {
+    let white_patterns = generated_white_component_patterns();
+    let black_patterns = generated_black_component_patterns();
+    let topology_families = [
+        DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
+        DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY,
+        DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY,
+    ];
+
+    let mut rows = Vec::with_capacity(rows_per_family * topology_families.len());
+    let mut seen_positions = BTreeSet::new();
+    let mut seen_decomposition_digests = BTreeSet::new();
+    let mut seen_component_digests = BTreeSet::new();
+    let mut seen_result_digests = BTreeSet::new();
+    let mut next_row_number = NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS.len() + 1;
+    for row in seed_rows {
+        seen_positions.insert(row.position.text.clone());
+        if let Some((decomposition_digest, result_digest, component_digests)) =
+            composition_digest_summary_for_row(row)
+        {
+            seen_decomposition_digests.insert(decomposition_digest);
+            seen_result_digests.insert(result_digest);
+            for digest in component_digests {
+                seen_component_digests.insert(digest);
+            }
+        }
+    }
+
+    for (family_index, topology_family) in topology_families.iter().enumerate() {
+        let family_target = rows_per_family;
+        let mut family_count = 0usize;
+        for &(left_index, right_index) in generated_pair_slots(family_index) {
+            if left_index >= white_patterns.len() || right_index >= black_patterns.len() {
+                continue;
+            }
+            let mut active_pieces = white_patterns[left_index].clone();
+            active_pieces.extend(black_patterns[right_index].iter().copied());
+            active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
+
+            let row_id = format!(
+                "{}-{:03}",
+                NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix, next_row_number
+            );
+            let spec = NonFixtureComposedBoardSpec {
+                row_id: &row_id,
+                active_pieces: &active_pieces,
+                fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
+                    + u32::try_from(next_row_number)
+                        .expect("generated row number fits fullmove u32"),
+                value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+                topology_family,
+            };
+            let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
+                continue;
+            };
+            if !generated_depth_two_row_within_node_budget(&row) {
+                continue;
+            }
+            let Some((decomposition_digest, result_digest, component_digests)) =
+                composition_digest_summary_for_row(&row)
+            else {
+                continue;
+            };
+            if component_digests.iter().collect::<BTreeSet<_>>().len() != component_digests.len() {
+                continue;
+            }
+            if seen_decomposition_digests.contains(&decomposition_digest)
+                || seen_result_digests.contains(&result_digest)
+                || component_digests
+                    .iter()
+                    .any(|digest| seen_component_digests.contains(digest))
+                || seen_positions.contains(&row.position.text)
+            {
+                continue;
+            }
+
+            seen_positions.insert(row.position.text.clone());
+            seen_decomposition_digests.insert(decomposition_digest);
+            seen_result_digests.insert(result_digest);
+            for digest in component_digests {
+                seen_component_digests.insert(digest);
+            }
+            rows.push(row);
+            next_row_number += 1;
+            family_count += 1;
+            if family_count == family_target {
+                break;
+            }
+        }
+    }
+
+    rows
+}
+
+fn generated_pair_slots(family_index: usize) -> &'static [(usize, usize)] {
+    match family_index {
+        0 => &[(10, 10), (11, 11), (12, 12), (13, 13), (14, 14), (8, 8)],
+        1 => &[(10, 11), (11, 10), (9, 12), (12, 9), (8, 10), (13, 11)],
+        2 => &[(11, 12), (12, 11), (14, 13), (13, 14), (10, 12), (12, 10)],
+        _ => unreachable!("generated topology family index is bounded"),
+    }
+}
+
+fn generated_white_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::A1, 'N'), (Square::A2, 'P'), (Square::B2, 'P')],
+        vec![(Square::A1, 'N'), (Square::A2, 'P')],
+        vec![
+            (Square::A1, 'N'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![(Square::A1, 'N'), (Square::B1, 'B'), (Square::C2, 'P')],
+        vec![
+            (Square::A1, 'N'),
+            (Square::B1, 'B'),
+            (Square::A2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![
+            (Square::A1, 'N'),
+            (Square::B1, 'B'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![(Square::A1, 'B'), (Square::B2, 'P'), (Square::C2, 'P')],
+        vec![
+            (Square::A1, 'B'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![(Square::A1, 'R'), (Square::B1, 'B'), (Square::C2, 'P')],
+        vec![
+            (Square::A1, 'R'),
+            (Square::B1, 'B'),
+            (Square::A2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![
+            (Square::A1, 'Q'),
+            (Square::B1, 'B'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![
+            (Square::A1, 'Q'),
+            (Square::B1, 'B'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+        ],
+        vec![
+            (Square::A1, 'N'),
+            (Square::C1, 'R'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+        ],
+        vec![
+            (Square::A1, 'N'),
+            (Square::C1, 'N'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+        ],
+        vec![
+            (Square::B1, 'R'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::A1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::B1, &['B', 'R'][..]),
+        (Square::C1, &['N', 'R'][..]),
+        (Square::A2, &['P', 'N'][..]),
+        (Square::B2, &['P'][..]),
+        (Square::C2, &['P'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_black_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::H8, 'n'), (Square::H7, 'p')],
+        vec![(Square::H8, 'n'), (Square::H7, 'p'), (Square::G7, 'p')],
+        vec![
+            (Square::H8, 'n'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        vec![(Square::H8, 'n'), (Square::G8, 'b'), (Square::F7, 'p')],
+        vec![
+            (Square::H8, 'n'),
+            (Square::G8, 'b'),
+            (Square::H7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        vec![
+            (Square::H8, 'n'),
+            (Square::G8, 'b'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        vec![(Square::H8, 'b'), (Square::G7, 'p'), (Square::F7, 'p')],
+        vec![
+            (Square::H8, 'b'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        vec![(Square::H8, 'r'), (Square::G8, 'b'), (Square::F7, 'p')],
+        vec![
+            (Square::H8, 'r'),
+            (Square::G8, 'b'),
+            (Square::H7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        vec![
+            (Square::H8, 'q'),
+            (Square::G8, 'b'),
+            (Square::G7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        vec![
+            (Square::H8, 'q'),
+            (Square::G8, 'b'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        vec![
+            (Square::H8, 'n'),
+            (Square::F8, 'r'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+        ],
+        vec![
+            (Square::H8, 'n'),
+            (Square::F8, 'n'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+        ],
+        vec![
+            (Square::G8, 'r'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+            (Square::F7, 'p'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::H8, &['n', 'b', 'r', 'q'][..]),
+        (Square::G8, &['b', 'r'][..]),
+        (Square::F8, &['n', 'r'][..]),
+        (Square::H7, &['p', 'n'][..]),
+        (Square::G7, &['p'][..]),
+        (Square::F7, &['p'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn unique_generated_component_patterns(
+    patterns: Vec<Vec<(Square, char)>>,
+) -> Vec<Vec<(Square, char)>> {
+    let mut seen = BTreeSet::new();
+    let mut unique = Vec::new();
+    for mut pattern in patterns {
+        pattern.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
+        let key = component_pattern_key(&pattern);
+        if seen.insert(key) {
+            unique.push(pattern);
+        }
+        if unique.len() == GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT {
+            break;
+        }
+    }
+    unique
+}
+
+fn component_pattern_key(pattern: &[(Square, char)]) -> String {
+    pattern
+        .iter()
+        .map(|(square, piece)| format!("{}{}", usize::from(*square), piece))
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn generated_component_patterns(options: &[(Square, &[char])]) -> Vec<Vec<(Square, char)>> {
+    fn visit(
+        options: &[(Square, &[char])],
+        index: usize,
+        current: &mut Vec<(Square, char)>,
+        patterns: &mut Vec<Vec<(Square, char)>>,
+    ) {
+        if index == options.len() {
+            if generated_component_pattern_is_in_scope(current) {
+                patterns.push(current.clone());
+            }
+            return;
+        }
+
+        visit(options, index + 1, current, patterns);
+        let (square, pieces) = options[index];
+        for piece in pieces {
+            current.push((square, *piece));
+            visit(options, index + 1, current, patterns);
+            current.pop();
+        }
+    }
+
+    let mut patterns = Vec::new();
+    visit(options, 0, &mut Vec::new(), &mut patterns);
+    patterns.sort_by_key(|pieces| {
+        (
+            pieces.len(),
+            pieces
+                .iter()
+                .map(|(square, piece)| format!("{}{}", usize::from(*square), piece))
+                .collect::<Vec<_>>()
+                .join("|"),
+        )
+    });
+    patterns.truncate(GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT);
+    patterns
+}
+
+fn generated_component_pattern_is_in_scope(pieces: &[(Square, char)]) -> bool {
+    let piece_count = pieces.len();
+    (2..=5).contains(&piece_count)
+        && pieces
+            .iter()
+            .any(|(_, piece)| !piece.eq_ignore_ascii_case(&'p'))
+}
+
+fn generated_depth_two_row_within_node_budget(row: &DatasetLabelRow) -> bool {
+    match &row.label {
+        LabelPayload::Exact { exact, .. } => exact
+            .value
+            .get("component_recursive_total_nodes")
+            .and_then(|nodes| nodes.parse::<usize>().ok())
+            .is_some_and(|nodes| nodes <= GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES),
+        _ => false,
+    }
+}
+
+fn composition_digest_summary_for_row(
+    row: &DatasetLabelRow,
+) -> Option<(String, String, Vec<String>)> {
+    let LabelPayload::Exact { provenance, .. } = &row.label else {
+        return None;
+    };
+    let composition = provenance.certificate.composition.as_ref()?;
+    let mut component_digests = composition
+        .component_values
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    component_digests.sort();
+    Some((
+        composition.decomposition_digest.clone(),
+        composition.result_value_digest.clone(),
+        component_digests,
+    ))
+}
 
 impl SampleLabelCandidate {
     fn to_row(self) -> DatasetLabelRow {
@@ -1709,11 +2092,24 @@ fn composition_fixture_piece(piece: char) -> shakmaty::Piece {
     }
 }
 
-fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> DatasetLabelRow {
+fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec<'_>) -> DatasetLabelRow {
+    try_non_fixture_composed_board_exact_row(spec)
+        .expect("non-fixture board composition spec must pass exact-row generation")
+}
+
+fn try_non_fixture_composed_board_exact_row(
+    spec: &NonFixtureComposedBoardSpec<'_>,
+) -> Result<DatasetLabelRow, String> {
     let board = non_fixture_composed_board(spec);
     let decomposition = bitmesh::certify_decomposition(&board);
     let proof = bitmesh::verify_conservative_legal_independence(&board, &decomposition)
-        .expect("non-fixture board composition spec must pass conservative independence proof");
+        .map_err(|error| format!("conservative independence proof failed: {error:?}"))?;
+    if proof.component_count != 2 {
+        return Err(format!(
+            "expected two independent components, got {}",
+            proof.component_count
+        ));
+    }
     let decomposition_digest = proof.decomposition_digest;
 
     let mut components = decomposition.components.iter().collect::<Vec<_>>();
@@ -1788,10 +2184,10 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
     };
     bmcompose
         .validate_against_decomposition(&decomposition)
-        .expect("non-fixture board composition must satisfy BMCOMPOSE root coverage");
+        .map_err(|error| format!("BMCOMPOSE root coverage failed: {error:?}"))?;
     let composition_digest = bmcompose
         .digest()
-        .expect("non-fixture board composition certificate must digest")
+        .map_err(|error| format!("BMCOMPOSE digest failed: {error:?}"))?
         .to_string();
 
     let mut exact = ExactLabel::from_thermograph_payload(&result_payload);
@@ -1867,7 +2263,7 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
         result_value.digest_v1_sha256(),
     );
 
-    DatasetLabelRow::exact(
+    Ok(DatasetLabelRow::exact(
         spec.row_id,
         NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.domain_id,
         DatasetPosition::fen(non_fixture_composed_board_fen(spec)),
@@ -1901,10 +2297,10 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
                 result_payload.digest,
             ),
         },
-    )
+    ))
 }
 
-fn non_fixture_composed_board(spec: &NonFixtureComposedBoardSpec) -> Board {
+fn non_fixture_composed_board(spec: &NonFixtureComposedBoardSpec<'_>) -> Board {
     let mut board = Board::empty();
     for (square, piece) in non_fixture_composed_board_wall_pieces() {
         board.set_piece_at(square, composition_fixture_piece(piece));
@@ -1915,7 +2311,7 @@ fn non_fixture_composed_board(spec: &NonFixtureComposedBoardSpec) -> Board {
     board
 }
 
-fn non_fixture_composed_board_fen(spec: &NonFixtureComposedBoardSpec) -> String {
+fn non_fixture_composed_board_fen(spec: &NonFixtureComposedBoardSpec<'_>) -> String {
     let mut pieces = non_fixture_composed_board_wall_pieces()
         .into_iter()
         .map(|(square, piece)| (usize::from(square), piece))
