@@ -441,15 +441,18 @@ fn generated_depth_two_profile_search_reports_current_capacity() {
     let report = dataset_label::generated_depth_two_profile_search_report(10);
 
     assert_eq!(report.rows_per_family_target, 10);
-    assert_eq!(report.white_profile_count, 21);
-    assert_eq!(report.black_profile_count, 14);
-    assert_eq!(report.selected_row_count, 8);
+    assert_eq!(report.left_profile_count, 234);
+    assert_eq!(report.right_profile_count, 253);
+    assert_eq!(report.selected_row_count, 30);
     assert_eq!(
         report.selected_counts_by_topology_family,
         std::collections::BTreeMap::from([
-            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 3),
-            ("dfile_two_component_depth2_local_move_v0".to_owned(), 3),
-            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2),
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                10
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 10),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 10),
         ])
     );
 }

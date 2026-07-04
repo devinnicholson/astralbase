@@ -643,8 +643,8 @@ pub struct NonFixtureCompositionReplayReport {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneratedDepthTwoProfileSearchReport {
     pub rows_per_family_target: usize,
-    pub white_profile_count: usize,
-    pub black_profile_count: usize,
+    pub left_profile_count: usize,
+    pub right_profile_count: usize,
     pub selected_row_count: usize,
     pub selected_counts_by_topology_family: BTreeMap<String, usize>,
     pub candidates: Vec<GeneratedDepthTwoProfileCandidateReport>,
@@ -1166,7 +1166,8 @@ const GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY: usize = 2;
 const GENERATED_DEPTH_TWO_MAX_COMPONENT_RECURSIVE_NODES: usize = 220;
 const GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES: usize = 1_000;
 const GENERATED_DEPTH_TWO_START_FULLMOVE: u32 = 200;
-const GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT: usize = 64;
+const GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT: usize = 1_536;
+const GENERATED_DEPTH_TWO_COMPONENT_PATTERN_GROUP_LIMIT: usize = 512;
 const GENERATED_DEPTH_TWO_PROFILE_PAIR_PLAN: [(usize, usize, &str); 6] = [
     (6, 7, DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY),
     (7, 8, DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY),
@@ -1794,8 +1795,8 @@ fn generated_depth_two_profile_search_report_with_seed(
 
     GeneratedDepthTwoProfileSearchReport {
         rows_per_family_target,
-        white_profile_count: white_profiles.len(),
-        black_profile_count: black_profiles.len(),
+        left_profile_count: white_profiles.len(),
+        right_profile_count: black_profiles.len(),
         selected_row_count: candidates.len(),
         selected_counts_by_topology_family,
         candidates,
@@ -2022,6 +2023,14 @@ fn generated_white_component_patterns() -> Vec<Vec<(Square, char)>> {
         (Square::B2, &['P'][..]),
         (Square::C2, &['P'][..]),
     ]));
+    patterns.extend(generated_component_patterns(&[
+        (Square::A2, &['N', 'B', 'R', 'Q'][..]),
+        (Square::B2, &['B', 'R'][..]),
+        (Square::C2, &['N', 'R'][..]),
+        (Square::A3, &['P', 'N'][..]),
+        (Square::B3, &['P'][..]),
+        (Square::C3, &['P'][..]),
+    ]));
     unique_generated_component_patterns(patterns)
 }
 
@@ -2124,6 +2133,30 @@ fn generated_black_component_patterns() -> Vec<Vec<(Square, char)>> {
         (Square::G7, &['p'][..]),
         (Square::F7, &['p'][..]),
     ]));
+    patterns.extend(generated_component_patterns(&[
+        (Square::H7, &['n', 'b', 'r', 'q'][..]),
+        (Square::G7, &['b', 'r'][..]),
+        (Square::F7, &['n', 'r'][..]),
+        (Square::H6, &['p', 'n'][..]),
+        (Square::G6, &['p'][..]),
+        (Square::F6, &['p'][..]),
+    ]));
+    patterns.extend(generated_component_patterns(&[
+        (Square::H8, &['n', 'b', 'r', 'q'][..]),
+        (Square::G8, &['N', 'B', 'R'][..]),
+        (Square::F8, &['n', 'r'][..]),
+        (Square::H7, &['P', 'N'][..]),
+        (Square::G7, &['p', 'P'][..]),
+        (Square::F7, &['P'][..]),
+    ]));
+    patterns.extend(generated_component_patterns(&[
+        (Square::H7, &['n', 'b', 'r', 'q'][..]),
+        (Square::G7, &['N', 'B', 'R'][..]),
+        (Square::F7, &['n', 'r'][..]),
+        (Square::H6, &['P', 'N'][..]),
+        (Square::G6, &['p', 'P'][..]),
+        (Square::F6, &['P'][..]),
+    ]));
     unique_generated_component_patterns(patterns)
 }
 
@@ -2188,7 +2221,7 @@ fn generated_component_patterns(options: &[(Square, &[char])]) -> Vec<Vec<(Squar
                 .join("|"),
         )
     });
-    patterns.truncate(GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT);
+    patterns.truncate(GENERATED_DEPTH_TWO_COMPONENT_PATTERN_GROUP_LIMIT);
     patterns
 }
 
