@@ -1030,10 +1030,18 @@ const DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_l
 const DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY: &str =
     "dfile_two_component_depth2_asymmetric_fan_v0";
 const DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_pawn_phalanx_v0";
-const GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY: usize = 2;
+const GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY: usize = 1;
 const GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES: usize = 1_000;
 const GENERATED_DEPTH_TWO_START_FULLMOVE: u32 = 200;
 const GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT: usize = 24;
+
+#[derive(Clone, Debug)]
+struct GeneratedDepthTwoComponentProfile {
+    active_pieces: Vec<(Square, char)>,
+    value: CGTValue,
+    value_digest: String,
+    recursive_nodes: usize,
+}
 
 #[derive(Clone, Copy, Debug)]
 enum CompositionFixtureTopology {
@@ -1403,8 +1411,10 @@ fn generated_depth_two_composed_board_exact_rows(
     seed_rows: &[DatasetLabelRow],
     rows_per_family: usize,
 ) -> Vec<DatasetLabelRow> {
-    let white_patterns = generated_white_component_patterns();
-    let black_patterns = generated_black_component_patterns();
+    let white_profiles =
+        generated_depth_two_component_profiles(generated_white_component_patterns());
+    let black_profiles =
+        generated_depth_two_component_profiles(generated_black_component_patterns());
     let topology_families = [
         DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
         DEPTH_TWO_ASYMMETRIC_FAN_TOPOLOGY_FAMILY,
@@ -1433,62 +1443,84 @@ fn generated_depth_two_composed_board_exact_rows(
     for (family_index, topology_family) in topology_families.iter().enumerate() {
         let family_target = rows_per_family;
         let mut family_count = 0usize;
-        for &(left_index, right_index) in generated_pair_slots(family_index) {
-            if left_index >= white_patterns.len() || right_index >= black_patterns.len() {
-                continue;
-            }
-            let mut active_pieces = white_patterns[left_index].clone();
-            active_pieces.extend(black_patterns[right_index].iter().copied());
-            active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
+        'family_rows: for (left_index, left) in white_profiles.iter().enumerate() {
+            for right_offset in 0..black_profiles.len() {
+                let right_index = generated_pair_index(
+                    left_index,
+                    right_offset,
+                    family_index,
+                    black_profiles.len(),
+                );
+                let right = &black_profiles[right_index];
+                let total_recursive_nodes = left.recursive_nodes + right.recursive_nodes;
+                if total_recursive_nodes > GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES
+                    || left.value_digest == right.value_digest
+                    || seen_component_digests.contains(&left.value_digest)
+                    || seen_component_digests.contains(&right.value_digest)
+                {
+                    continue;
+                }
+                let result_value = CGTValue::sum_all(&[left.value.clone(), right.value.clone()]);
+                let result_payload = result_value.exact_value_payload();
+                if seen_result_digests.contains(&result_payload.digest) {
+                    continue;
+                }
 
-            let row_id = format!(
-                "{}-{:03}",
-                NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix, next_row_number
-            );
-            let spec = NonFixtureComposedBoardSpec {
-                row_id: &row_id,
-                active_pieces: &active_pieces,
-                fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
-                    + u32::try_from(next_row_number)
-                        .expect("generated row number fits fullmove u32"),
-                value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
-                topology_family,
-            };
-            let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
-                continue;
-            };
-            if !generated_depth_two_row_within_node_budget(&row) {
-                continue;
-            }
-            let Some((decomposition_digest, result_digest, component_digests)) =
-                composition_digest_summary_for_row(&row)
-            else {
-                continue;
-            };
-            if component_digests.iter().collect::<BTreeSet<_>>().len() != component_digests.len() {
-                continue;
-            }
-            if seen_decomposition_digests.contains(&decomposition_digest)
-                || seen_result_digests.contains(&result_digest)
-                || component_digests
-                    .iter()
-                    .any(|digest| seen_component_digests.contains(digest))
-                || seen_positions.contains(&row.position.text)
-            {
-                continue;
-            }
+                let mut active_pieces = left.active_pieces.clone();
+                active_pieces.extend(right.active_pieces.iter().copied());
+                active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
 
-            seen_positions.insert(row.position.text.clone());
-            seen_decomposition_digests.insert(decomposition_digest);
-            seen_result_digests.insert(result_digest);
-            for digest in component_digests {
-                seen_component_digests.insert(digest);
-            }
-            rows.push(row);
-            next_row_number += 1;
-            family_count += 1;
-            if family_count == family_target {
-                break;
+                let row_id = format!(
+                    "{}-{:03}",
+                    NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix, next_row_number
+                );
+                let spec = NonFixtureComposedBoardSpec {
+                    row_id: &row_id,
+                    active_pieces: &active_pieces,
+                    fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
+                        + u32::try_from(next_row_number)
+                            .expect("generated row number fits fullmove u32"),
+                    value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+                    topology_family,
+                };
+                let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
+                    continue;
+                };
+                if !generated_depth_two_row_within_node_budget(&row) {
+                    continue;
+                }
+                let Some((decomposition_digest, result_digest, component_digests)) =
+                    composition_digest_summary_for_row(&row)
+                else {
+                    continue;
+                };
+                if component_digests.iter().collect::<BTreeSet<_>>().len()
+                    != component_digests.len()
+                {
+                    continue;
+                }
+                if seen_decomposition_digests.contains(&decomposition_digest)
+                    || seen_result_digests.contains(&result_digest)
+                    || component_digests
+                        .iter()
+                        .any(|digest| seen_component_digests.contains(digest))
+                    || seen_positions.contains(&row.position.text)
+                {
+                    continue;
+                }
+
+                seen_positions.insert(row.position.text.clone());
+                seen_decomposition_digests.insert(decomposition_digest);
+                seen_result_digests.insert(result_digest);
+                for digest in component_digests {
+                    seen_component_digests.insert(digest);
+                }
+                rows.push(row);
+                next_row_number += 1;
+                family_count += 1;
+                if family_count == family_target {
+                    break 'family_rows;
+                }
             }
         }
     }
@@ -1496,13 +1528,80 @@ fn generated_depth_two_composed_board_exact_rows(
     rows
 }
 
-fn generated_pair_slots(family_index: usize) -> &'static [(usize, usize)] {
+fn generated_pair_index(
+    left_index: usize,
+    right_offset: usize,
+    family_index: usize,
+    black_profile_count: usize,
+) -> usize {
     match family_index {
-        0 => &[(10, 10), (11, 11), (12, 12), (13, 13), (14, 14), (8, 8)],
-        1 => &[(10, 11), (11, 10), (9, 12), (12, 9), (8, 10), (13, 11)],
-        2 => &[(11, 12), (12, 11), (14, 13), (13, 14), (10, 12), (12, 10)],
+        0 => (left_index + right_offset) % black_profile_count,
+        1 => (left_index * 3 + right_offset + 5) % black_profile_count,
+        2 => (left_index * 5 + right_offset * 2 + 7) % black_profile_count,
         _ => unreachable!("generated topology family index is bounded"),
     }
+}
+
+fn generated_depth_two_component_profiles(
+    patterns: Vec<Vec<(Square, char)>>,
+) -> Vec<GeneratedDepthTwoComponentProfile> {
+    let mut profiles = Vec::new();
+    let mut seen_value_digests = BTreeSet::new();
+    for active_pieces in patterns {
+        let Some(profile) = generated_depth_two_component_profile(active_pieces) else {
+            continue;
+        };
+        if profile.recursive_nodes <= GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES
+            && seen_value_digests.insert(profile.value_digest.clone())
+        {
+            profiles.push(profile);
+        }
+    }
+    profiles
+}
+
+fn generated_depth_two_component_profile(
+    active_pieces: Vec<(Square, char)>,
+) -> Option<GeneratedDepthTwoComponentProfile> {
+    let board = non_fixture_component_profile_board(&active_pieces);
+    let decomposition = bitmesh::certify_decomposition(&board);
+    let mut components = decomposition
+        .components
+        .iter()
+        .filter(|component| component.active_mask.into_iter().next().is_some());
+    let component = components.next()?;
+    if components.next().is_some() {
+        return None;
+    }
+    let material_value = component_material_balance(&board, component.active_mask);
+    let local_move_counts =
+        component_local_move_counts(&board, component.mask, component.active_mask);
+    let component_evaluation = component_cgt_evaluation(
+        NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+        &board,
+        component.mask,
+        component.active_mask,
+        material_value,
+        local_move_counts,
+    );
+    let payload = component_evaluation.value.exact_value_payload();
+    Some(GeneratedDepthTwoComponentProfile {
+        active_pieces,
+        value: component_evaluation.value,
+        value_digest: payload.digest,
+        recursive_nodes: component_evaluation.recursive_nodes?,
+    })
+}
+
+fn non_fixture_component_profile_board(active_pieces: &[(Square, char)]) -> Board {
+    let mut board = Board::empty();
+    for (square, piece) in non_fixture_composed_board_wall_pieces() {
+        board.set_piece_at(square, composition_fixture_piece(piece));
+    }
+    for (square, piece) in active_pieces {
+        board.set_piece_at(*square, composition_fixture_piece(*piece));
+    }
+    board
 }
 
 fn generated_white_component_patterns() -> Vec<Vec<(Square, char)>> {
