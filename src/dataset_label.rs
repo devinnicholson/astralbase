@@ -19,7 +19,7 @@ pub const DEFAULT_FRONTIER_SHARD_LIMIT: usize = 1_000;
 pub const DEFAULT_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_EXPANDED_FAMILY_FRONTIER_LIMIT_PER_FAMILY: usize = 1_000;
 pub const DEFAULT_COMPOSITION_HARD_TARGET_SHARD_LIMIT: usize = 21;
-pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 9;
+pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 11;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -937,6 +937,7 @@ struct NonFixtureComposedBoardSpec {
     active_pieces: &'static [(Square, char)],
     fullmove_number: u32,
     value_rule: NonFixtureComposedBoardValueRule,
+    topology_family: &'static str,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1015,6 +1016,10 @@ struct ComponentLocalMove {
 }
 
 const COMPONENT_DEPTH_TWO_LOCAL_MOVE_DEPTH: u8 = 2;
+const MATERIAL_BALANCE_TOPOLOGY_FAMILY: &str = "dfile_two_component_material_balance_v0";
+const AGENCY_ATOM_TOPOLOGY_FAMILY: &str = "dfile_two_component_agency_atom_v0";
+const LOCAL_MOVE_TOPOLOGY_FAMILY: &str = "dfile_two_component_local_move_v0";
+const DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_local_move_v0";
 
 #[derive(Clone, Copy, Debug)]
 enum CompositionFixtureTopology {
@@ -1241,12 +1246,13 @@ const NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES: [NonFixtureComposedDomainCandidate
     },
 ];
 
-const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 6] = [
+const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 8] = [
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-001",
         active_pieces: &[(Square::A1, 'N'), (Square::H8, 'n'), (Square::G7, 'p')],
         fullmove_number: 101,
         value_rule: NonFixtureComposedBoardValueRule::MaterialBalanceSum,
+        topology_family: MATERIAL_BALANCE_TOPOLOGY_FAMILY,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-002",
@@ -1259,18 +1265,21 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 6] =
         ],
         fullmove_number: 102,
         value_rule: NonFixtureComposedBoardValueRule::MaterialBalanceSum,
+        topology_family: MATERIAL_BALANCE_TOPOLOGY_FAMILY,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-003",
         active_pieces: &[(Square::A2, 'n'), (Square::H7, 'N'), (Square::G6, 'P')],
         fullmove_number: 103,
         value_rule: NonFixtureComposedBoardValueRule::MaterialBalanceSum,
+        topology_family: MATERIAL_BALANCE_TOPOLOGY_FAMILY,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-004",
         active_pieces: &[(Square::A1, 'N'), (Square::A2, 'P'), (Square::H8, 'n')],
         fullmove_number: 104,
         value_rule: NonFixtureComposedBoardValueRule::AgencyAtomSum,
+        topology_family: AGENCY_ATOM_TOPOLOGY_FAMILY,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-005",
@@ -1282,6 +1291,7 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 6] =
         ],
         fullmove_number: 105,
         value_rule: NonFixtureComposedBoardValueRule::LocalMoveGame,
+        topology_family: LOCAL_MOVE_TOPOLOGY_FAMILY,
     },
     NonFixtureComposedBoardSpec {
         row_id: "astralbase-w18-non-fixture-composed-board-006",
@@ -1294,6 +1304,36 @@ const NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS: [NonFixtureComposedBoardSpec; 6] =
         ],
         fullmove_number: 106,
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+        topology_family: DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-007",
+        active_pieces: &[
+            (Square::A1, 'N'),
+            (Square::A2, 'P'),
+            (Square::H8, 'n'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+        ],
+        fullmove_number: 107,
+        value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+        topology_family: DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
+    },
+    NonFixtureComposedBoardSpec {
+        row_id: "astralbase-w18-non-fixture-composed-board-008",
+        active_pieces: &[
+            (Square::A1, 'N'),
+            (Square::A2, 'P'),
+            (Square::B2, 'P'),
+            (Square::C2, 'P'),
+            (Square::H8, 'n'),
+            (Square::H7, 'p'),
+            (Square::G7, 'p'),
+            (Square::F7, 'p'),
+        ],
+        fullmove_number: 108,
+        value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+        topology_family: DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY,
     },
 ];
 
@@ -1707,6 +1747,10 @@ fn non_fixture_composed_board_exact_row(spec: &NonFixtureComposedBoardSpec) -> D
     exact.value.insert(
         "composition_value_rule".to_owned(),
         spec.value_rule.composition_value_rule().to_owned(),
+    );
+    exact.value.insert(
+        "component_topology_family".to_owned(),
+        spec.topology_family.to_owned(),
     );
     exact
         .value
@@ -3064,6 +3108,12 @@ mod tests {
                         .value
                         .get("composition_value_rule")
                         .map(String::as_str);
+                    assert!(
+                        exact
+                            .value
+                            .get("component_topology_family")
+                            .is_some_and(|family| !family.is_empty())
+                    );
                     assert!(matches!(
                         composition_value_rule,
                         Some("component_material_balance_sum_v0")
@@ -3124,6 +3174,13 @@ mod tests {
                             assert_eq!(
                                 exact.value.get("solver_scope").map(String::as_str),
                                 Some("composition_board_component_depth2_local_moves")
+                            );
+                            assert_eq!(
+                                exact
+                                    .value
+                                    .get("component_topology_family")
+                                    .map(String::as_str),
+                                Some(DEPTH_TWO_LOCAL_MOVE_TOPOLOGY_FAMILY)
                             );
                             assert_eq!(exact.value_class, ExactValueClass::GameTree);
                             assert_eq!(

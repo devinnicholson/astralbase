@@ -73,7 +73,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     && row.label_kind() == LabelKind::Exact
             )
             .count(),
-        6
+        8
     );
     assert_eq!(
         rows.iter()
@@ -133,7 +133,7 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                 )
             })
             .count(),
-        1
+        3
     );
 
     for row in rows {
@@ -147,6 +147,12 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                     .value
                     .get("composition_value_rule")
                     .map(String::as_str);
+                assert!(
+                    exact
+                        .value
+                        .get("component_topology_family")
+                        .is_some_and(|family| !family.is_empty())
+                );
                 assert!(matches!(
                     composition_value_rule,
                     Some("component_material_balance_sum_v0")
@@ -174,6 +180,13 @@ fn non_fixture_composed_domain_jsonl_has_exact_board_rows_and_rejected_chess_row
                 }
                 if composition_value_rule == Some("component_depth2_local_move_game_v0") {
                     assert_eq!(exact.value_class, dataset_label::ExactValueClass::GameTree);
+                    assert_eq!(
+                        exact
+                            .value
+                            .get("component_topology_family")
+                            .map(String::as_str),
+                        Some("dfile_two_component_depth2_local_move_v0")
+                    );
                     assert_eq!(
                         exact.value.get("solver_depth").map(String::as_str),
                         Some("2")
