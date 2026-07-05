@@ -556,6 +556,40 @@ fn leakage_clean_non_fixture_composed_domain_jsonl_has_no_reuse_capacity() {
         ])
     );
 
+    let mut positions = std::collections::BTreeSet::new();
+    let mut decomposition_digests = std::collections::BTreeSet::new();
+    let mut composition_digests = std::collections::BTreeSet::new();
+    let mut component_identities = std::collections::BTreeSet::new();
+    let mut component_value_digests = std::collections::BTreeSet::new();
+    let mut component_value_identities = std::collections::BTreeSet::new();
+    let mut result_value_digests = std::collections::BTreeSet::new();
+    for row in rows
+        .iter()
+        .filter(|row| row.label_kind() == LabelKind::Exact)
+    {
+        assert!(positions.insert(row.position.text.clone()));
+        let LabelPayload::Exact { provenance, .. } = &row.label else {
+            unreachable!("exact rows are filtered above");
+        };
+        let composition = provenance
+            .certificate
+            .composition
+            .as_ref()
+            .expect("exact composition row carries structured certificate");
+        assert!(decomposition_digests.insert(composition.decomposition_digest.clone()));
+        assert!(composition_digests.insert(composition.composition_digest.clone()));
+        assert!(result_value_digests.insert(composition.result_value_digest.clone()));
+        for (component_root, value_digest) in &composition.component_values {
+            let component_identity =
+                format!("{}:{component_root}", composition.decomposition_digest);
+            assert!(component_identities.insert(component_identity.clone()));
+            assert!(component_value_digests.insert(value_digest.clone()));
+            assert!(
+                component_value_identities.insert(format!("{component_identity}={value_digest}"))
+            );
+        }
+    }
+
     let report = dataset_label::replay_verify_non_fixture_composed_domain_jsonl(&jsonl).unwrap();
     assert_eq!(report.row_count, 21);
     assert_eq!(report.checked_exact_rows, 18);
@@ -602,6 +636,17 @@ fn generated_depth_two_profile_search_reports_current_capacity() {
     assert_eq!(report.rows_per_family_target, 10);
     assert_eq!(report.left_profile_count, 14);
     assert_eq!(report.right_profile_count, 13);
+    assert_eq!(
+        report.candidate_pair_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                182
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 182),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 182),
+        ])
+    );
     assert_eq!(report.selected_row_count, 7);
     assert_eq!(
         report.selected_counts_by_topology_family,
@@ -610,5 +655,12 @@ fn generated_depth_two_profile_search_reports_current_capacity() {
             ("dfile_two_component_depth2_local_move_v0".to_owned(), 3),
             ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2),
         ])
+    );
+    assert_eq!(
+        report.rejection_counts,
+        std::collections::BTreeMap::from([(
+            "component_value_digest_reuse_before_materialization".to_owned(),
+            539
+        )])
     );
 }

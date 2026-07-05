@@ -648,8 +648,10 @@ pub struct GeneratedDepthTwoProfileSearchReport {
     pub rows_per_family_target: usize,
     pub left_profile_count: usize,
     pub right_profile_count: usize,
+    pub candidate_pair_counts_by_topology_family: BTreeMap<String, usize>,
     pub selected_row_count: usize,
     pub selected_counts_by_topology_family: BTreeMap<String, usize>,
+    pub rejection_counts: BTreeMap<String, usize>,
     pub candidates: Vec<GeneratedDepthTwoProfileCandidateReport>,
 }
 
@@ -1256,7 +1258,9 @@ struct GeneratedDepthTwoSelectedProfileCandidate {
 struct GeneratedDepthTwoProfileSelection {
     left_profile_count: usize,
     right_profile_count: usize,
+    candidate_pair_counts: Vec<usize>,
     family_counts: Vec<usize>,
+    rejection_counts: BTreeMap<String, usize>,
     candidates: Vec<GeneratedDepthTwoSelectedProfileCandidate>,
 }
 
@@ -1886,7 +1890,7 @@ fn generated_depth_two_leakage_clean_composed_board_exact_rows(
     seed_rows: &[DatasetLabelRow],
     rows_per_family: usize,
 ) -> Vec<DatasetLabelRow> {
-    let selection = generated_depth_two_profile_selection(seed_rows, rows_per_family, false);
+    let selection = generated_depth_two_leakage_clean_profile_selection(seed_rows, rows_per_family);
 
     let mut rows = Vec::with_capacity(selection.candidates.len());
     let mut seen_positions = BTreeSet::new();
@@ -1976,12 +1980,18 @@ fn generated_depth_two_profile_search_report_with_seed(
     rows_per_family_target: usize,
 ) -> GeneratedDepthTwoProfileSearchReport {
     let topology_families = generated_depth_two_topology_families();
-    let selection = generated_depth_two_profile_selection(seed_rows, rows_per_family_target, false);
+    let selection =
+        generated_depth_two_leakage_clean_profile_selection(seed_rows, rows_per_family_target);
 
     let selected_counts_by_topology_family = topology_families
         .iter()
         .enumerate()
         .map(|(index, family)| ((*family).to_owned(), selection.family_counts[index]))
+        .collect::<BTreeMap<_, _>>();
+    let candidate_pair_counts_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| ((*family).to_owned(), selection.candidate_pair_counts[index]))
         .collect::<BTreeMap<_, _>>();
 
     let candidates = selection
@@ -2004,8 +2014,232 @@ fn generated_depth_two_profile_search_report_with_seed(
         rows_per_family_target,
         left_profile_count: selection.left_profile_count,
         right_profile_count: selection.right_profile_count,
+        candidate_pair_counts_by_topology_family,
         selected_row_count: candidates.len(),
         selected_counts_by_topology_family,
+        rejection_counts: selection.rejection_counts,
+        candidates,
+    }
+}
+
+fn generated_depth_two_leakage_clean_profile_selection(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoProfileSelection {
+    let white_profiles =
+        generated_depth_two_wall_safe_component_profiles(generated_white_component_patterns());
+    let black_profiles =
+        generated_depth_two_wall_safe_component_profiles(generated_black_component_patterns());
+    let topology_families = generated_depth_two_topology_families();
+
+    let mut seen_positions = BTreeSet::new();
+    let mut seen_decomposition_digests = BTreeSet::new();
+    let mut seen_composition_digests = BTreeSet::new();
+    let mut seen_component_identities = BTreeSet::new();
+    let mut seen_component_value_digests = BTreeSet::new();
+    let mut seen_component_value_identities = BTreeSet::new();
+    let mut seen_result_digests = BTreeSet::new();
+    for row in seed_rows {
+        seen_positions.insert(row.position.text.clone());
+        if let Some(summary) = composition_identity_summary_for_row(row) {
+            seen_decomposition_digests.insert(summary.decomposition_digest);
+            seen_composition_digests.insert(summary.composition_digest);
+            seen_result_digests.insert(summary.result_value_digest);
+            seen_component_identities.extend(summary.component_identities);
+            seen_component_value_digests.extend(summary.component_value_digests);
+            seen_component_value_identities.extend(summary.component_value_identities);
+        }
+    }
+
+    let mut candidate_offsets = vec![0usize; topology_families.len()];
+    let candidate_pairs = topology_families
+        .iter()
+        .enumerate()
+        .map(|(family_index, _family)| {
+            generated_depth_two_profile_candidate_pairs(
+                family_index,
+                &white_profiles,
+                &black_profiles,
+            )
+        })
+        .collect::<Vec<_>>();
+    let candidate_pair_counts = candidate_pairs
+        .iter()
+        .map(std::vec::Vec::len)
+        .collect::<Vec<_>>();
+    let mut family_counts = vec![0usize; topology_families.len()];
+    let mut rejection_counts = BTreeMap::new();
+    let mut candidates = Vec::new();
+    let mut next_row_number = NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS.len() + 1;
+
+    while family_counts
+        .iter()
+        .any(|count| *count < rows_per_family_target)
+    {
+        let mut made_progress = false;
+        for (family_index, topology_family) in topology_families.iter().enumerate() {
+            if family_counts[family_index] == rows_per_family_target {
+                continue;
+            }
+
+            while candidate_offsets[family_index] < candidate_pairs[family_index].len() {
+                let (left_index, right_index, total_recursive_nodes) =
+                    candidate_pairs[family_index][candidate_offsets[family_index]];
+                candidate_offsets[family_index] += 1;
+                let left = &white_profiles[left_index];
+                let right = &black_profiles[right_index];
+                if left.value_digest == right.value_digest {
+                    increment_count(&mut rejection_counts, "same_component_value_digest");
+                    continue;
+                }
+                if seen_component_value_digests.contains(&left.value_digest)
+                    || seen_component_value_digests.contains(&right.value_digest)
+                {
+                    increment_count(
+                        &mut rejection_counts,
+                        "component_value_digest_reuse_before_materialization",
+                    );
+                    continue;
+                }
+                let result_value = CGTValue::sum_all(&[left.value.clone(), right.value.clone()]);
+                let result_value_digest = result_value.exact_value_payload().digest;
+                if seen_result_digests.contains(&result_value_digest) {
+                    increment_count(
+                        &mut rejection_counts,
+                        "result_value_digest_reuse_before_materialization",
+                    );
+                    continue;
+                }
+
+                let mut active_pieces = left.active_pieces.clone();
+                active_pieces.extend(right.active_pieces.iter().copied());
+                active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
+                let board_position_key = generated_depth_two_board_position_key(&active_pieces);
+                if seen_positions.contains(&board_position_key) {
+                    increment_count(
+                        &mut rejection_counts,
+                        "position_reuse_before_materialization",
+                    );
+                    continue;
+                }
+
+                let row_id = format!(
+                    "{}-{:03}",
+                    NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix, next_row_number
+                );
+                let spec = NonFixtureComposedBoardSpec {
+                    row_id: &row_id,
+                    active_pieces: &active_pieces,
+                    fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
+                        + u32::try_from(next_row_number)
+                            .expect("generated row number fits fullmove u32"),
+                    value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+                    topology_family,
+                    spec_source: PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE,
+                };
+                let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
+                    increment_count(&mut rejection_counts, "materialization_failure");
+                    continue;
+                };
+                if !generated_depth_two_row_within_node_budget(&row) {
+                    increment_count(&mut rejection_counts, "row_recursive_node_budget");
+                    continue;
+                }
+                let Some(summary) = composition_identity_summary_for_row(&row) else {
+                    increment_count(&mut rejection_counts, "missing_identity_summary");
+                    continue;
+                };
+                if has_duplicates(&summary.component_identities)
+                    || has_duplicates(&summary.component_value_digests)
+                    || has_duplicates(&summary.component_value_identities)
+                {
+                    increment_count(&mut rejection_counts, "intra_row_identity_duplicate");
+                    continue;
+                }
+                if seen_positions.contains(&row.position.text) {
+                    increment_count(&mut rejection_counts, "row_position_reuse");
+                    continue;
+                }
+                if seen_decomposition_digests.contains(&summary.decomposition_digest) {
+                    increment_count(&mut rejection_counts, "decomposition_digest_reuse");
+                    continue;
+                }
+                if seen_composition_digests.contains(&summary.composition_digest) {
+                    increment_count(&mut rejection_counts, "composition_digest_reuse");
+                    continue;
+                }
+                if seen_result_digests.contains(&summary.result_value_digest) {
+                    increment_count(
+                        &mut rejection_counts,
+                        "result_value_digest_reuse_after_materialization",
+                    );
+                    continue;
+                }
+                if summary
+                    .component_identities
+                    .iter()
+                    .any(|identity| seen_component_identities.contains(identity))
+                {
+                    increment_count(&mut rejection_counts, "component_identity_reuse");
+                    continue;
+                }
+                if summary
+                    .component_value_digests
+                    .iter()
+                    .any(|digest| seen_component_value_digests.contains(digest))
+                {
+                    increment_count(
+                        &mut rejection_counts,
+                        "component_value_digest_reuse_after_materialization",
+                    );
+                    continue;
+                }
+                if summary
+                    .component_value_identities
+                    .iter()
+                    .any(|identity| seen_component_value_identities.contains(identity))
+                {
+                    increment_count(&mut rejection_counts, "component_value_identity_reuse");
+                    continue;
+                }
+
+                seen_positions.insert(board_position_key);
+                seen_positions.insert(row.position.text.clone());
+                seen_decomposition_digests.insert(summary.decomposition_digest);
+                seen_composition_digests.insert(summary.composition_digest);
+                seen_result_digests.insert(summary.result_value_digest);
+                seen_component_identities.extend(summary.component_identities);
+                seen_component_value_digests.extend(summary.component_value_digests);
+                seen_component_value_identities.extend(summary.component_value_identities);
+                candidates.push(GeneratedDepthTwoSelectedProfileCandidate {
+                    row_number: next_row_number,
+                    topology_family,
+                    left_profile_index: left_index,
+                    right_profile_index: right_index,
+                    total_recursive_nodes,
+                    active_pieces,
+                    left_component_value_digest: left.value_digest.clone(),
+                    right_component_value_digest: right.value_digest.clone(),
+                    result_value_digest,
+                });
+                next_row_number += 1;
+                family_counts[family_index] += 1;
+                made_progress = true;
+                break;
+            }
+        }
+
+        if !made_progress {
+            break;
+        }
+    }
+
+    GeneratedDepthTwoProfileSelection {
+        left_profile_count: white_profiles.len(),
+        right_profile_count: black_profiles.len(),
+        candidate_pair_counts,
+        family_counts,
+        rejection_counts,
         candidates,
     }
 }
@@ -2048,6 +2282,10 @@ fn generated_depth_two_profile_selection(
                 &black_profiles,
             )
         })
+        .collect::<Vec<_>>();
+    let candidate_pair_counts = candidate_pairs
+        .iter()
+        .map(std::vec::Vec::len)
         .collect::<Vec<_>>();
     let mut family_counts = vec![0usize; topology_families.len()];
     let mut candidates = Vec::new();
@@ -2120,7 +2358,9 @@ fn generated_depth_two_profile_selection(
     GeneratedDepthTwoProfileSelection {
         left_profile_count: white_profiles.len(),
         right_profile_count: black_profiles.len(),
+        candidate_pair_counts,
         family_counts,
+        rejection_counts: BTreeMap::new(),
         candidates,
     }
 }
@@ -2640,6 +2880,10 @@ fn composition_identity_summary_for_row(
 
 fn has_duplicates(values: &[String]) -> bool {
     values.iter().collect::<BTreeSet<_>>().len() != values.len()
+}
+
+fn increment_count(counts: &mut BTreeMap<String, usize>, key: &'static str) {
+    *counts.entry(key.to_owned()).or_default() += 1;
 }
 
 impl SampleLabelCandidate {
