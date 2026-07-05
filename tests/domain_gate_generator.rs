@@ -1037,6 +1037,30 @@ fn mixed_hook_upper_bound_selects_value_unique_rows() {
 }
 
 #[test]
+fn expanded_mixed_hook_upper_bound_is_diagnostic_only() {
+    let report =
+        dataset_label::generated_depth_two_value_unique_signature_expanded_mixed_hook_upper_bound_report(1);
+
+    assert_eq!(
+        report.source,
+        "corner_plus_edge_plus_expanded_mixed_color_hook_v0"
+    );
+    assert!(report.current_selection_evaluated);
+    assert_eq!(report.left_unique_component_value_digest_count, 125);
+    assert_eq!(report.right_unique_component_value_digest_count, 226);
+    assert_eq!(report.component_value_capacity_upper_bound, 3);
+    assert_eq!(report.current_selected_row_count, 3);
+    assert_eq!(
+        report.current_selected_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 1),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 1),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 1),
+        ])
+    );
+}
+
+#[test]
 fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
     let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
 
