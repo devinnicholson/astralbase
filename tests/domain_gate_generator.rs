@@ -1027,6 +1027,51 @@ fn signature_target_replay_preflight_flags_stale_recomputable_field() {
 }
 
 #[test]
+fn signature_target_exact_shard_promotes_replayed_metadata() {
+    let jsonl = dataset_label::signature_target_exact_shard_jsonl(1).unwrap();
+    let rows = dataset_label::parse_and_validate_jsonl(&jsonl).unwrap();
+    let replay_report = dataset_label::replay_verify_non_fixture_composed_domain_jsonl(&jsonl)
+        .expect("signature target exact rows must replay");
+
+    assert_eq!(rows.len(), 3);
+    assert_eq!(replay_report.checked_exact_rows, 3);
+    assert_eq!(replay_report.skipped_non_target_rows, 0);
+    assert!(rows.iter().all(|row| row.label_kind() == LabelKind::Exact));
+
+    let LabelPayload::Exact { exact, .. } = &rows[0].label else {
+        panic!("signature target exact row must be exact");
+    };
+    assert_eq!(
+        exact.value.get("signature_target_rule").map(String::as_str),
+        Some("depth2_material_mobility_signature_exact_metadata_v0")
+    );
+    assert_eq!(
+        exact
+            .value
+            .get("signature_target_status")
+            .map(String::as_str),
+        Some("replay_exact_metadata")
+    );
+    assert_eq!(
+        exact
+            .value
+            .get("signature_target_contract_id")
+            .map(String::as_str),
+        Some("depth2_material_mobility_signature_target_contract_v0")
+    );
+    assert_eq!(
+        exact.value.get("current_result_value_digest"),
+        exact.value.get("digest")
+    );
+    assert!(
+        exact
+            .value
+            .get("result_signature_key")
+            .is_some_and(|value| value.contains(";left:value:"))
+    );
+}
+
+#[test]
 fn generated_depth_two_duplicate_clusters_expose_signature_collapse() {
     let report = dataset_label::generated_depth_two_duplicate_cluster_report();
 

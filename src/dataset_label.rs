@@ -1413,6 +1413,12 @@ pub fn signature_target_diagnostic_shard_jsonl(
     serialize_jsonl(&signature_target_diagnostic_shard(rows_per_family))
 }
 
+pub fn signature_target_exact_shard_jsonl(
+    rows_per_family: usize,
+) -> Result<String, serde_json::Error> {
+    serialize_jsonl(&signature_target_exact_shard(rows_per_family))
+}
+
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
     let mut rows = SAMPLE_LABEL_CANDIDATES
@@ -1582,6 +1588,42 @@ pub fn signature_target_diagnostic_shard(rows_per_family: usize) -> Vec<DatasetL
         .candidates
         .iter()
         .map(signature_target_diagnostic_row)
+        .collect()
+}
+
+#[must_use]
+pub fn signature_target_exact_shard(rows_per_family: usize) -> Vec<DatasetLabelRow> {
+    let mut seed_rows = Vec::new();
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS
+            .iter()
+            .map(non_fixture_composed_board_exact_row),
+    );
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                non_fixture_composed_domain_rejected_row(index + 1, candidate)
+            }),
+    );
+    let selection = generated_depth_two_value_unique_signature_profile_selection_with_patterns(
+        &seed_rows,
+        rows_per_family,
+        generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        ),
+        generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        ),
+        None,
+    );
+    selection
+        .candidates
+        .iter()
+        .map(signature_target_exact_row)
         .collect()
 }
 
@@ -1895,6 +1937,9 @@ const PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE: &str =
 const SIGNATURE_TARGET_DIAGNOSTIC_SOURCE: &str = "signature_profile_target_diagnostic_v0";
 const SIGNATURE_TARGET_DIAGNOSTIC_ROW_ID_PREFIX: &str =
     "astralbase-w39-signature-target-diagnostic";
+const SIGNATURE_TARGET_EXACT_SOURCE: &str = "signature_target_replay_exact_metadata_v0";
+const SIGNATURE_TARGET_EXACT_ROW_ID_PREFIX: &str = "astralbase-w47-signature-target-exact";
+const SIGNATURE_TARGET_EXACT_RULE: &str = "depth2_material_mobility_signature_exact_metadata_v0";
 const SIGNATURE_TARGET_CONTRACT_ID: &str = "depth2_material_mobility_signature_target_contract_v0";
 const SIGNATURE_TARGET_COMPONENT_RULE: &str =
     "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0";
@@ -2808,6 +2853,96 @@ fn signature_target_diagnostic_row(
     )
 }
 
+fn signature_target_exact_row(
+    candidate: &GeneratedDepthTwoSelectedSignatureCandidate,
+) -> DatasetLabelRow {
+    let row_id = format!(
+        "{}-{:03}",
+        SIGNATURE_TARGET_EXACT_ROW_ID_PREFIX, candidate.row_number
+    );
+    let spec = NonFixtureComposedBoardSpec {
+        row_id: &row_id,
+        active_pieces: &candidate.active_pieces,
+        fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
+            + u32::try_from(candidate.row_number).expect("generated row number fits fullmove u32"),
+        value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+        topology_family: candidate.topology_family,
+        spec_source: SIGNATURE_TARGET_EXACT_SOURCE,
+    };
+    let mut row = try_non_fixture_composed_board_exact_row(&spec)
+        .expect("signature target exact row must replay");
+    let LabelPayload::Exact { exact, .. } = &mut row.label else {
+        panic!("signature target exact row generator must emit exact rows");
+    };
+    exact.value.extend(BTreeMap::from([
+        (
+            "signature_target_rule".to_owned(),
+            SIGNATURE_TARGET_EXACT_RULE.to_owned(),
+        ),
+        (
+            "signature_target_contract_id".to_owned(),
+            SIGNATURE_TARGET_CONTRACT_ID.to_owned(),
+        ),
+        (
+            "signature_target_status".to_owned(),
+            "replay_exact_metadata".to_owned(),
+        ),
+        (
+            "source_signature_diagnostic_row_id".to_owned(),
+            format!(
+                "{}-{:03}",
+                SIGNATURE_TARGET_DIAGNOSTIC_ROW_ID_PREFIX, candidate.row_number
+            ),
+        ),
+        (
+            "component_signature_rule".to_owned(),
+            SIGNATURE_TARGET_COMPONENT_RULE.to_owned(),
+        ),
+        ("row_number".to_owned(), candidate.row_number.to_string()),
+        (
+            "left_profile_index".to_owned(),
+            candidate.left_profile_index.to_string(),
+        ),
+        (
+            "right_profile_index".to_owned(),
+            candidate.right_profile_index.to_string(),
+        ),
+        (
+            "total_recursive_nodes".to_owned(),
+            candidate.total_recursive_nodes.to_string(),
+        ),
+        (
+            "active_pieces".to_owned(),
+            generated_depth_two_active_piece_summary(&candidate.active_pieces),
+        ),
+        (
+            "left_component_value_digest".to_owned(),
+            candidate.left_component_value_digest.clone(),
+        ),
+        (
+            "right_component_value_digest".to_owned(),
+            candidate.right_component_value_digest.clone(),
+        ),
+        (
+            "current_result_value_digest".to_owned(),
+            candidate.current_result_value_digest.clone(),
+        ),
+        (
+            "left_component_signature".to_owned(),
+            candidate.left_component_signature.clone(),
+        ),
+        (
+            "right_component_signature".to_owned(),
+            candidate.right_component_signature.clone(),
+        ),
+        (
+            "result_signature_key".to_owned(),
+            candidate.result_signature_key.clone(),
+        ),
+    ]));
+    row
+}
+
 fn generated_depth_two_profile_search_report_with_seed(
     seed_rows: &[DatasetLabelRow],
     rows_per_family_target: usize,
@@ -3257,6 +3392,41 @@ fn generated_depth_two_signature_profile_selection_with_patterns(
     black_patterns: Vec<Vec<(Square, char)>>,
     candidate_pair_limit_per_family: Option<usize>,
 ) -> GeneratedDepthTwoSignatureProfileSelection {
+    generated_depth_two_signature_profile_selection_with_patterns_internal(
+        seed_rows,
+        rows_per_family_target,
+        white_patterns,
+        black_patterns,
+        candidate_pair_limit_per_family,
+        false,
+    )
+}
+
+fn generated_depth_two_value_unique_signature_profile_selection_with_patterns(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+    candidate_pair_limit_per_family: Option<usize>,
+) -> GeneratedDepthTwoSignatureProfileSelection {
+    generated_depth_two_signature_profile_selection_with_patterns_internal(
+        seed_rows,
+        rows_per_family_target,
+        white_patterns,
+        black_patterns,
+        candidate_pair_limit_per_family,
+        true,
+    )
+}
+
+fn generated_depth_two_signature_profile_selection_with_patterns_internal(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+    candidate_pair_limit_per_family: Option<usize>,
+    require_value_digest_uniqueness: bool,
+) -> GeneratedDepthTwoSignatureProfileSelection {
     let white_profiles = generated_depth_two_signature_profiles(white_patterns);
     let black_profiles = generated_depth_two_signature_profiles(black_patterns);
     let topology_families = generated_depth_two_topology_families();
@@ -3265,6 +3435,9 @@ fn generated_depth_two_signature_profile_selection_with_patterns(
     let mut seen_decomposition_digests = BTreeSet::new();
     let mut seen_composition_digests = BTreeSet::new();
     let mut seen_component_identities = BTreeSet::new();
+    let mut seen_component_value_digests = BTreeSet::new();
+    let mut seen_component_value_identities = BTreeSet::new();
+    let mut seen_result_digests = BTreeSet::new();
     for row in seed_rows {
         seen_positions.insert(row.position.text.clone());
         if let Some(summary) = composition_identity_summary_for_row(row) {
@@ -3320,12 +3493,26 @@ fn generated_depth_two_signature_profile_selection_with_patterns(
                     increment_count(&mut rejection_counts, "same_component_signature");
                     continue;
                 }
+                if require_value_digest_uniqueness && left.value_digest == right.value_digest {
+                    increment_count(&mut rejection_counts, "same_component_value_digest");
+                    continue;
+                }
                 if seen_component_signatures.contains(&left.component_signature)
                     || seen_component_signatures.contains(&right.component_signature)
                 {
                     increment_count(
                         &mut rejection_counts,
                         "component_signature_reuse_before_materialization",
+                    );
+                    continue;
+                }
+                if require_value_digest_uniqueness
+                    && (seen_component_value_digests.contains(&left.value_digest)
+                        || seen_component_value_digests.contains(&right.value_digest))
+                {
+                    increment_count(
+                        &mut rejection_counts,
+                        "component_value_digest_reuse_before_materialization",
                     );
                     continue;
                 }
@@ -3338,6 +3525,18 @@ fn generated_depth_two_signature_profile_selection_with_patterns(
                     increment_count(
                         &mut rejection_counts,
                         "result_signature_reuse_before_materialization",
+                    );
+                    continue;
+                }
+                let current_result_value =
+                    CGTValue::sum_all(&[left.value.clone(), right.value.clone()]);
+                let current_result_value_digest = current_result_value.exact_value_payload().digest;
+                if require_value_digest_uniqueness
+                    && seen_result_digests.contains(&current_result_value_digest)
+                {
+                    increment_count(
+                        &mut rejection_counts,
+                        "result_value_digest_reuse_before_materialization",
                     );
                     continue;
                 }
@@ -3387,6 +3586,13 @@ fn generated_depth_two_signature_profile_selection_with_patterns(
                     );
                     continue;
                 }
+                if require_value_digest_uniqueness
+                    && (has_duplicates(&summary.component_value_digests)
+                        || has_duplicates(&summary.component_value_identities))
+                {
+                    increment_count(&mut rejection_counts, "intra_row_component_value_duplicate");
+                    continue;
+                }
                 if seen_positions.contains(&row.position.text) {
                     increment_count(&mut rejection_counts, "row_position_reuse");
                     continue;
@@ -3407,15 +3613,47 @@ fn generated_depth_two_signature_profile_selection_with_patterns(
                     increment_count(&mut rejection_counts, "component_identity_reuse");
                     continue;
                 }
+                if require_value_digest_uniqueness
+                    && seen_result_digests.contains(&summary.result_value_digest)
+                {
+                    increment_count(
+                        &mut rejection_counts,
+                        "result_value_digest_reuse_after_materialization",
+                    );
+                    continue;
+                }
+                if require_value_digest_uniqueness
+                    && summary
+                        .component_value_digests
+                        .iter()
+                        .any(|digest| seen_component_value_digests.contains(digest))
+                {
+                    increment_count(
+                        &mut rejection_counts,
+                        "component_value_digest_reuse_after_materialization",
+                    );
+                    continue;
+                }
+                if require_value_digest_uniqueness
+                    && summary
+                        .component_value_identities
+                        .iter()
+                        .any(|identity| seen_component_value_identities.contains(identity))
+                {
+                    increment_count(&mut rejection_counts, "component_value_identity_reuse");
+                    continue;
+                }
 
-                let current_result_value =
-                    CGTValue::sum_all(&[left.value.clone(), right.value.clone()]);
-                let current_result_value_digest = current_result_value.exact_value_payload().digest;
                 seen_positions.insert(board_position_key);
                 seen_positions.insert(row.position.text.clone());
                 seen_decomposition_digests.insert(summary.decomposition_digest);
                 seen_composition_digests.insert(summary.composition_digest);
                 seen_component_identities.extend(summary.component_identities);
+                if require_value_digest_uniqueness {
+                    seen_result_digests.insert(summary.result_value_digest);
+                    seen_component_value_digests.extend(summary.component_value_digests);
+                    seen_component_value_identities.extend(summary.component_value_identities);
+                }
                 seen_component_signatures.insert(left.component_signature.clone());
                 seen_component_signatures.insert(right.component_signature.clone());
                 seen_result_signature_keys.insert(result_signature_key.clone());
