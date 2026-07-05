@@ -725,3 +725,65 @@ fn generated_depth_two_profile_inventory_reports_profile_collapse() {
         Some("180b3b4f81e9a743")
     );
 }
+
+#[test]
+fn generated_depth_three_profile_inventory_reports_recursive_budget_collapse() {
+    let report = dataset_label::generated_depth_three_profile_inventory_report();
+
+    assert_eq!(report.component_depth, 3);
+    assert_eq!(report.white.pattern_count, 526);
+    assert_eq!(report.white.wall_safe_pattern_count, 129);
+    assert_eq!(report.white.accepted_profile_count, 6);
+    assert_eq!(
+        report.white.rejection_counts,
+        std::collections::BTreeMap::from([
+            ("component_recursive_node_budget".to_owned(), 91),
+            ("duplicate_value_digest".to_owned(), 32),
+            ("wall_safety".to_owned(), 397),
+        ])
+    );
+    assert_eq!(
+        report
+            .white
+            .profiles
+            .first()
+            .map(|profile| profile.value_digest.as_str()),
+        Some("fba411ddcb9b11ab")
+    );
+    assert_eq!(
+        report
+            .white
+            .profiles
+            .last()
+            .map(|profile| profile.value_digest.as_str()),
+        Some("d28ab60b0246139f")
+    );
+
+    assert_eq!(report.black.pattern_count, 527);
+    assert_eq!(report.black.wall_safe_pattern_count, 365);
+    assert_eq!(report.black.accepted_profile_count, 4);
+    assert_eq!(
+        report.black.rejection_counts,
+        std::collections::BTreeMap::from([
+            ("component_recursive_node_budget".to_owned(), 337),
+            ("duplicate_value_digest".to_owned(), 24),
+            ("wall_safety".to_owned(), 162),
+        ])
+    );
+    assert_eq!(
+        report
+            .black
+            .profiles
+            .first()
+            .map(|profile| profile.value_digest.as_str()),
+        Some("6a0d959a882bb6c9")
+    );
+    assert_eq!(
+        report
+            .black
+            .profiles
+            .last()
+            .map(|profile| profile.value_digest.as_str()),
+        Some("e64db62c384d0f52")
+    );
+}

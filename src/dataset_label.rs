@@ -675,6 +675,13 @@ pub struct GeneratedDepthTwoProfileInventoryReport {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedLocalMoveProfileInventoryReport {
+    pub component_depth: u8,
+    pub white: GeneratedDepthTwoProfileInventorySideReport,
+    pub black: GeneratedDepthTwoProfileInventorySideReport,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneratedDepthTwoProfileInventorySideReport {
     pub pattern_count: usize,
     pub wall_safe_pattern_count: usize,
@@ -765,6 +772,16 @@ pub fn generated_depth_two_profile_inventory_report() -> GeneratedDepthTwoProfil
     GeneratedDepthTwoProfileInventoryReport {
         white: generated_depth_two_profile_inventory_side(generated_white_component_patterns()),
         black: generated_depth_two_profile_inventory_side(generated_black_component_patterns()),
+    }
+}
+
+#[must_use]
+pub fn generated_depth_three_profile_inventory_report() -> GeneratedLocalMoveProfileInventoryReport
+{
+    GeneratedLocalMoveProfileInventoryReport {
+        component_depth: 3,
+        white: generated_local_move_profile_inventory_side(generated_white_component_patterns(), 3),
+        black: generated_local_move_profile_inventory_side(generated_black_component_patterns(), 3),
     }
 }
 
@@ -2517,6 +2534,57 @@ fn generated_depth_two_profile_inventory_side(
     }
 }
 
+fn generated_local_move_profile_inventory_side(
+    patterns: Vec<Vec<(Square, char)>>,
+    component_depth: u8,
+) -> GeneratedDepthTwoProfileInventorySideReport {
+    let pattern_count = patterns.len();
+    let mut wall_safe_pattern_count = 0usize;
+    let mut profiles = Vec::new();
+    let mut seen_value_digests = BTreeSet::new();
+    let mut rejection_counts = BTreeMap::new();
+
+    for active_pieces in patterns {
+        let board = non_fixture_component_profile_board(&active_pieces);
+        if !generated_component_pattern_respects_wall(&board, &active_pieces) {
+            increment_count(&mut rejection_counts, "wall_safety");
+            continue;
+        }
+        wall_safe_pattern_count += 1;
+
+        let Some(profile) = generated_local_move_component_profile(active_pieces, component_depth)
+        else {
+            increment_count(&mut rejection_counts, "materialization_failure");
+            continue;
+        };
+        if profile.recursive_nodes > GENERATED_DEPTH_TWO_MAX_COMPONENT_RECURSIVE_NODES {
+            increment_count(&mut rejection_counts, "component_recursive_node_budget");
+            continue;
+        }
+        if !seen_value_digests.insert(profile.value_digest.clone()) {
+            increment_count(&mut rejection_counts, "duplicate_value_digest");
+            continue;
+        }
+
+        let payload = profile.value.exact_value_payload();
+        profiles.push(GeneratedDepthTwoComponentProfileReport {
+            profile_index: profiles.len(),
+            active_pieces: generated_depth_two_active_piece_summary(&profile.active_pieces),
+            value_class: payload.value_class.as_str().to_owned(),
+            value_digest: payload.digest,
+            recursive_nodes: profile.recursive_nodes,
+        });
+    }
+
+    GeneratedDepthTwoProfileInventorySideReport {
+        pattern_count,
+        wall_safe_pattern_count,
+        accepted_profile_count: profiles.len(),
+        rejection_counts,
+        profiles,
+    }
+}
+
 fn generated_depth_two_wall_safe_component_profiles(
     patterns: Vec<Vec<(Square, char)>>,
 ) -> Vec<GeneratedDepthTwoComponentProfile> {
@@ -2561,6 +2629,35 @@ fn generated_depth_two_component_profile(
         value: component_evaluation.value,
         value_digest: payload.digest,
         recursive_nodes: component_evaluation.recursive_nodes?,
+    })
+}
+
+fn generated_local_move_component_profile(
+    active_pieces: Vec<(Square, char)>,
+    component_depth: u8,
+) -> Option<GeneratedDepthTwoComponentProfile> {
+    let board = non_fixture_component_profile_board(&active_pieces);
+    let decomposition = bitmesh::certify_decomposition(&board);
+    let mut components = decomposition
+        .components
+        .iter()
+        .filter(|component| component.active_mask.into_iter().next().is_some());
+    let component = components.next()?;
+    if components.next().is_some() {
+        return None;
+    }
+    let (value, recursive_nodes) = component_recursive_local_move_game_value(
+        &board,
+        component.mask,
+        component.active_mask,
+        component_depth,
+    );
+    let payload = value.exact_value_payload();
+    Some(GeneratedDepthTwoComponentProfile {
+        active_pieces,
+        value,
+        value_digest: payload.digest,
+        recursive_nodes,
     })
 }
 

@@ -127,6 +127,15 @@ fn main() {
             );
             return;
         }
+        Some("--generated-depth-three-profile-inventory") => {
+            let report = dataset_label::generated_depth_three_profile_inventory_report();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .expect("generated depth-three profile inventory report must serialize")
+            );
+            return;
+        }
         Some(arg) => {
             eprintln!("unsupported argument: {arg}");
             std::process::exit(2);
@@ -163,6 +172,7 @@ Commands:\n\
   --replay-non-fixture-composed-domain-shard PATH\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
   --generated-depth-two-profile-inventory\n\
+  --generated-depth-three-profile-inventory\n\
   --help\n"
     );
 }
