@@ -693,6 +693,42 @@ pub struct GeneratedDepthTwoNamedProfileInventoryReport {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoDuplicateClusterReport {
+    pub source: String,
+    pub white: GeneratedDepthTwoDuplicateClusterSideReport,
+    pub black: GeneratedDepthTwoDuplicateClusterSideReport,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoDuplicateClusterSideReport {
+    pub pattern_count: usize,
+    pub wall_safe_pattern_count: usize,
+    pub budget_profile_count: usize,
+    pub unique_value_digest_count: usize,
+    pub duplicate_cluster_count: usize,
+    pub duplicate_profile_count: usize,
+    pub rejection_counts: BTreeMap<String, usize>,
+    pub clusters: Vec<GeneratedDepthTwoDuplicateClusterSummary>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoDuplicateClusterSummary {
+    pub value_digest: String,
+    pub profile_count: usize,
+    pub distinct_signature_count: usize,
+    pub signatures: Vec<String>,
+    pub examples: Vec<GeneratedDepthTwoDuplicateClusterExample>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoDuplicateClusterExample {
+    pub active_pieces: String,
+    pub material_balance: i32,
+    pub local_move_counts: String,
+    pub recursive_nodes: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneratedLocalMoveProfileInventoryReport {
     pub component_depth: u8,
     pub white: GeneratedDepthTwoProfileInventorySideReport,
@@ -855,6 +891,21 @@ pub fn generated_depth_two_profile_source_inventory_report()
                 ),
             ),
         ],
+    }
+}
+
+#[must_use]
+pub fn generated_depth_two_duplicate_cluster_report() -> GeneratedDepthTwoDuplicateClusterReport {
+    GeneratedDepthTwoDuplicateClusterReport {
+        source: "corner_plus_edge_minor_ladder_v0".to_owned(),
+        white: generated_depth_two_duplicate_cluster_side(generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        )),
+        black: generated_depth_two_duplicate_cluster_side(generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        )),
     }
 }
 
@@ -1356,6 +1407,8 @@ const GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES: usize = 1_000;
 const GENERATED_DEPTH_TWO_START_FULLMOVE: u32 = 200;
 const GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT: usize = 1_536;
 const GENERATED_DEPTH_TWO_COMPONENT_PATTERN_GROUP_LIMIT: usize = 512;
+const GENERATED_DEPTH_TWO_DUPLICATE_CLUSTER_REPORT_LIMIT: usize = 16;
+const GENERATED_DEPTH_TWO_DUPLICATE_CLUSTER_EXAMPLE_LIMIT: usize = 5;
 
 fn generated_depth_two_topology_families() -> [&'static str; 3] {
     [
@@ -2662,6 +2715,119 @@ fn generated_depth_two_named_profile_inventory_report(
     }
 }
 
+fn generated_depth_two_duplicate_cluster_side(
+    patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoDuplicateClusterSideReport {
+    let pattern_count = patterns.len();
+    let mut wall_safe_pattern_count = 0usize;
+    let mut rejection_counts = BTreeMap::new();
+    let mut profiles_by_digest: BTreeMap<String, Vec<GeneratedDepthTwoDuplicateClusterExample>> =
+        BTreeMap::new();
+
+    for active_pieces in patterns {
+        let board = non_fixture_component_profile_board(&active_pieces);
+        if !generated_component_pattern_respects_wall(&board, &active_pieces) {
+            increment_count(&mut rejection_counts, "wall_safety");
+            continue;
+        }
+        wall_safe_pattern_count += 1;
+
+        let Some(profile) = generated_depth_two_component_profile(active_pieces) else {
+            increment_count(&mut rejection_counts, "materialization_failure");
+            continue;
+        };
+        if profile.recursive_nodes > GENERATED_DEPTH_TWO_MAX_COMPONENT_RECURSIVE_NODES {
+            increment_count(&mut rejection_counts, "component_recursive_node_budget");
+            continue;
+        }
+        let Some((material_balance, local_move_counts)) =
+            generated_depth_two_component_signature(&profile.active_pieces)
+        else {
+            increment_count(&mut rejection_counts, "signature_failure");
+            continue;
+        };
+
+        profiles_by_digest
+            .entry(profile.value_digest.clone())
+            .or_default()
+            .push(GeneratedDepthTwoDuplicateClusterExample {
+                active_pieces: generated_depth_two_active_piece_summary(&profile.active_pieces),
+                material_balance,
+                local_move_counts: format!(
+                    "white:{},black:{}",
+                    local_move_counts.white, local_move_counts.black
+                ),
+                recursive_nodes: profile.recursive_nodes,
+            });
+    }
+
+    let budget_profile_count = profiles_by_digest
+        .values()
+        .map(std::vec::Vec::len)
+        .sum::<usize>();
+    let unique_value_digest_count = profiles_by_digest.len();
+    let duplicate_profile_count = profiles_by_digest
+        .values()
+        .filter(|profiles| profiles.len() > 1)
+        .map(std::vec::Vec::len)
+        .sum::<usize>();
+    let mut clusters = profiles_by_digest
+        .into_iter()
+        .filter_map(|(value_digest, mut examples)| {
+            if examples.len() <= 1 {
+                return None;
+            }
+            examples.sort_by(|left, right| {
+                left.active_pieces
+                    .cmp(&right.active_pieces)
+                    .then(left.material_balance.cmp(&right.material_balance))
+                    .then(left.local_move_counts.cmp(&right.local_move_counts))
+                    .then(left.recursive_nodes.cmp(&right.recursive_nodes))
+            });
+            let signatures = examples
+                .iter()
+                .map(|example| {
+                    format!(
+                        "material:{},moves:{}",
+                        example.material_balance, example.local_move_counts
+                    )
+                })
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            Some(GeneratedDepthTwoDuplicateClusterSummary {
+                value_digest,
+                profile_count: examples.len(),
+                distinct_signature_count: signatures.len(),
+                signatures,
+                examples: examples
+                    .into_iter()
+                    .take(GENERATED_DEPTH_TWO_DUPLICATE_CLUSTER_EXAMPLE_LIMIT)
+                    .collect(),
+            })
+        })
+        .collect::<Vec<_>>();
+    clusters.sort_by(|left, right| {
+        right
+            .profile_count
+            .cmp(&left.profile_count)
+            .then(left.value_digest.cmp(&right.value_digest))
+    });
+    let duplicate_cluster_count = clusters.len();
+    clusters.truncate(GENERATED_DEPTH_TWO_DUPLICATE_CLUSTER_REPORT_LIMIT);
+
+    GeneratedDepthTwoDuplicateClusterSideReport {
+        pattern_count,
+        wall_safe_pattern_count,
+        budget_profile_count,
+        unique_value_digest_count,
+        duplicate_cluster_count,
+        duplicate_profile_count,
+        rejection_counts,
+        clusters,
+    }
+}
+
 fn generated_local_move_profile_inventory_side(
     patterns: Vec<Vec<(Square, char)>>,
     component_depth: u8,
@@ -2758,6 +2924,25 @@ fn generated_depth_two_component_profile(
         value_digest: payload.digest,
         recursive_nodes: component_evaluation.recursive_nodes?,
     })
+}
+
+fn generated_depth_two_component_signature(
+    active_pieces: &[(Square, char)],
+) -> Option<(i32, ComponentLocalMoveCounts)> {
+    let board = non_fixture_component_profile_board(active_pieces);
+    let decomposition = bitmesh::certify_decomposition(&board);
+    let mut components = decomposition
+        .components
+        .iter()
+        .filter(|component| component.active_mask.into_iter().next().is_some());
+    let component = components.next()?;
+    if components.next().is_some() {
+        return None;
+    }
+    Some((
+        component_material_balance(&board, component.active_mask),
+        component_local_move_counts(&board, component.mask, component.active_mask),
+    ))
 }
 
 fn generated_local_move_component_profile(

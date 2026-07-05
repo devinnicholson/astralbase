@@ -804,6 +804,46 @@ fn generated_depth_two_combined_source_profile_search_reports_no_gain() {
 }
 
 #[test]
+fn generated_depth_two_duplicate_clusters_expose_signature_collapse() {
+    let report = dataset_label::generated_depth_two_duplicate_cluster_report();
+
+    assert_eq!(report.source, "corner_plus_edge_minor_ladder_v0");
+    assert_eq!(report.white.pattern_count, 901);
+    assert_eq!(report.white.wall_safe_pattern_count, 262);
+    assert_eq!(report.white.budget_profile_count, 254);
+    assert_eq!(report.white.unique_value_digest_count, 15);
+    assert_eq!(report.white.duplicate_cluster_count, 12);
+    assert_eq!(report.white.duplicate_profile_count, 251);
+    assert_eq!(
+        report.white.rejection_counts,
+        std::collections::BTreeMap::from([
+            ("component_recursive_node_budget".to_owned(), 8),
+            ("wall_safety".to_owned(), 639),
+        ])
+    );
+    assert_eq!(report.white.clusters[0].value_digest, "60ebee880a925aa7");
+    assert_eq!(report.white.clusters[0].profile_count, 45);
+    assert_eq!(report.white.clusters[0].distinct_signature_count, 8);
+
+    assert_eq!(report.black.pattern_count, 934);
+    assert_eq!(report.black.wall_safe_pattern_count, 623);
+    assert_eq!(report.black.budget_profile_count, 517);
+    assert_eq!(report.black.unique_value_digest_count, 14);
+    assert_eq!(report.black.duplicate_cluster_count, 13);
+    assert_eq!(report.black.duplicate_profile_count, 516);
+    assert_eq!(
+        report.black.rejection_counts,
+        std::collections::BTreeMap::from([
+            ("component_recursive_node_budget".to_owned(), 106),
+            ("wall_safety".to_owned(), 311),
+        ])
+    );
+    assert_eq!(report.black.clusters[0].value_digest, "e0a1d2f9e449e554");
+    assert_eq!(report.black.clusters[0].profile_count, 125);
+    assert_eq!(report.black.clusters[0].distinct_signature_count, 12);
+}
+
+#[test]
 fn generated_depth_three_profile_inventory_reports_recursive_budget_collapse() {
     let report = dataset_label::generated_depth_three_profile_inventory_report();
 

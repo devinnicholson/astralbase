@@ -150,6 +150,15 @@ fn main() {
             );
             return;
         }
+        Some("--generated-depth-two-duplicate-clusters") => {
+            let report = dataset_label::generated_depth_two_duplicate_cluster_report();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .expect("generated depth-two duplicate cluster report must serialize")
+            );
+            return;
+        }
         Some("--generated-depth-three-profile-inventory") => {
             let report = dataset_label::generated_depth_three_profile_inventory_report();
             println!(
@@ -197,6 +206,7 @@ Commands:\n\
   --generated-depth-two-combined-source-profile-search [--rows-per-family N]\n\
   --generated-depth-two-profile-inventory\n\
   --generated-depth-two-profile-source-inventory\n\
+  --generated-depth-two-duplicate-clusters\n\
   --generated-depth-three-profile-inventory\n\
   --help\n"
     );
