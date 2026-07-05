@@ -664,3 +664,64 @@ fn generated_depth_two_profile_search_reports_current_capacity() {
         )])
     );
 }
+
+#[test]
+fn generated_depth_two_profile_inventory_reports_profile_collapse() {
+    let report = dataset_label::generated_depth_two_profile_inventory_report();
+
+    assert_eq!(report.white.pattern_count, 526);
+    assert_eq!(report.white.wall_safe_pattern_count, 129);
+    assert_eq!(report.white.accepted_profile_count, 14);
+    assert_eq!(
+        report.white.rejection_counts,
+        std::collections::BTreeMap::from([
+            ("component_recursive_node_budget".to_owned(), 6),
+            ("duplicate_value_digest".to_owned(), 109),
+            ("wall_safety".to_owned(), 397),
+        ])
+    );
+    assert_eq!(
+        report
+            .white
+            .profiles
+            .first()
+            .map(|profile| profile.active_pieces.as_str()),
+        Some("a1N,a2P,b2P")
+    );
+    assert_eq!(
+        report
+            .white
+            .profiles
+            .last()
+            .map(|profile| profile.value_digest.as_str()),
+        Some("7f770cf2a36c12fa")
+    );
+
+    assert_eq!(report.black.pattern_count, 527);
+    assert_eq!(report.black.wall_safe_pattern_count, 365);
+    assert_eq!(report.black.accepted_profile_count, 13);
+    assert_eq!(
+        report.black.rejection_counts,
+        std::collections::BTreeMap::from([
+            ("component_recursive_node_budget".to_owned(), 91),
+            ("duplicate_value_digest".to_owned(), 261),
+            ("wall_safety".to_owned(), 162),
+        ])
+    );
+    assert_eq!(
+        report
+            .black
+            .profiles
+            .first()
+            .map(|profile| profile.active_pieces.as_str()),
+        Some("h7p,h8n")
+    );
+    assert_eq!(
+        report
+            .black
+            .profiles
+            .last()
+            .map(|profile| profile.value_digest.as_str()),
+        Some("180b3b4f81e9a743")
+    );
+}

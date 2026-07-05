@@ -668,6 +668,30 @@ pub struct GeneratedDepthTwoProfileCandidateReport {
     pub result_value_digest: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoProfileInventoryReport {
+    pub white: GeneratedDepthTwoProfileInventorySideReport,
+    pub black: GeneratedDepthTwoProfileInventorySideReport,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoProfileInventorySideReport {
+    pub pattern_count: usize,
+    pub wall_safe_pattern_count: usize,
+    pub accepted_profile_count: usize,
+    pub rejection_counts: BTreeMap<String, usize>,
+    pub profiles: Vec<GeneratedDepthTwoComponentProfileReport>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoComponentProfileReport {
+    pub profile_index: usize,
+    pub active_pieces: String,
+    pub value_class: String,
+    pub value_digest: String,
+    pub recursive_nodes: usize,
+}
+
 pub fn replay_verify_non_fixture_composed_domain_jsonl(
     input: &str,
 ) -> LabelValidationResult<NonFixtureCompositionReplayReport> {
@@ -734,6 +758,14 @@ pub fn generated_depth_two_profile_search_report(
             }),
     );
     generated_depth_two_profile_search_report_with_seed(&seed_rows, rows_per_family_target)
+}
+
+#[must_use]
+pub fn generated_depth_two_profile_inventory_report() -> GeneratedDepthTwoProfileInventoryReport {
+    GeneratedDepthTwoProfileInventoryReport {
+        white: generated_depth_two_profile_inventory_side(generated_white_component_patterns()),
+        black: generated_depth_two_profile_inventory_side(generated_black_component_patterns()),
+    }
 }
 
 pub fn sample_audited_shard_jsonl() -> Result<String, serde_json::Error> {
@@ -2434,6 +2466,55 @@ fn generated_depth_two_component_profiles(
         }
     }
     profiles
+}
+
+fn generated_depth_two_profile_inventory_side(
+    patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoProfileInventorySideReport {
+    let pattern_count = patterns.len();
+    let mut wall_safe_pattern_count = 0usize;
+    let mut profiles = Vec::new();
+    let mut seen_value_digests = BTreeSet::new();
+    let mut rejection_counts = BTreeMap::new();
+
+    for active_pieces in patterns {
+        let board = non_fixture_component_profile_board(&active_pieces);
+        if !generated_component_pattern_respects_wall(&board, &active_pieces) {
+            increment_count(&mut rejection_counts, "wall_safety");
+            continue;
+        }
+        wall_safe_pattern_count += 1;
+
+        let Some(profile) = generated_depth_two_component_profile(active_pieces) else {
+            increment_count(&mut rejection_counts, "materialization_failure");
+            continue;
+        };
+        if profile.recursive_nodes > GENERATED_DEPTH_TWO_MAX_COMPONENT_RECURSIVE_NODES {
+            increment_count(&mut rejection_counts, "component_recursive_node_budget");
+            continue;
+        }
+        if !seen_value_digests.insert(profile.value_digest.clone()) {
+            increment_count(&mut rejection_counts, "duplicate_value_digest");
+            continue;
+        }
+
+        let payload = profile.value.exact_value_payload();
+        profiles.push(GeneratedDepthTwoComponentProfileReport {
+            profile_index: profiles.len(),
+            active_pieces: generated_depth_two_active_piece_summary(&profile.active_pieces),
+            value_class: payload.value_class.as_str().to_owned(),
+            value_digest: payload.digest,
+            recursive_nodes: profile.recursive_nodes,
+        });
+    }
+
+    GeneratedDepthTwoProfileInventorySideReport {
+        pattern_count,
+        wall_safe_pattern_count,
+        accepted_profile_count: profiles.len(),
+        rejection_counts,
+        profiles,
+    }
 }
 
 fn generated_depth_two_wall_safe_component_profiles(

@@ -118,6 +118,15 @@ fn main() {
             );
             return;
         }
+        Some("--generated-depth-two-profile-inventory") => {
+            let report = dataset_label::generated_depth_two_profile_inventory_report();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .expect("generated depth-two profile inventory report must serialize")
+            );
+            return;
+        }
         Some(arg) => {
             eprintln!("unsupported argument: {arg}");
             std::process::exit(2);
@@ -153,6 +162,7 @@ Commands:\n\
   --leakage-clean-non-fixture-composed-domain-shard [--rows-per-family N]\n\
   --replay-non-fixture-composed-domain-shard PATH\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
+  --generated-depth-two-profile-inventory\n\
   --help\n"
     );
 }
