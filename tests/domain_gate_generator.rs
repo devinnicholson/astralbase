@@ -1132,6 +1132,69 @@ fn pattern_limit_atlas_is_capacity_only() {
 }
 
 #[test]
+fn left_supply_atlas_identifies_rpf50_capacity_candidates() {
+    let report =
+        dataset_label::generated_depth_two_value_unique_signature_left_supply_atlas_report(50);
+
+    assert_eq!(report.rows_per_family_target, 50);
+    assert_eq!(report.sources.len(), 9);
+    assert!(
+        report
+            .sources
+            .iter()
+            .all(|source| !source.current_selection_evaluated)
+    );
+    assert_eq!(
+        report
+            .sources
+            .iter()
+            .map(|source| (
+                source.source.as_str(),
+                source.left_unique_component_value_digest_count,
+                source.right_unique_component_value_digest_count,
+                source.component_value_capacity_upper_bound
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            ("bounded_expanded_left_vs_expanded_right_v0", 125, 226, 125),
+            (
+                "unbounded_expanded_plus_interior_left_vs_expanded_right_v0",
+                129,
+                226,
+                129
+            ),
+            ("near_wall_left_supply_vs_expanded_right_v0", 31, 226, 31),
+            ("outer_left_supply_vs_expanded_right_v0", 66, 226, 66),
+            ("diagonal_left_supply_vs_expanded_right_v0", 39, 226, 39),
+            (
+                "unbounded_expanded_plus_near_wall_left_vs_expanded_right_v0",
+                140,
+                226,
+                140
+            ),
+            (
+                "unbounded_expanded_plus_outer_left_vs_expanded_right_v0",
+                155,
+                226,
+                150
+            ),
+            (
+                "unbounded_expanded_plus_diagonal_left_vs_expanded_right_v0",
+                135,
+                226,
+                135
+            ),
+            (
+                "unbounded_all_left_supply_vs_expanded_right_v0",
+                167,
+                226,
+                150
+            ),
+        ]
+    );
+}
+
+#[test]
 fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
     let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
 

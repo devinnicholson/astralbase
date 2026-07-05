@@ -1782,6 +1782,151 @@ pub fn generated_depth_two_value_unique_signature_pattern_limit_atlas_report(
 }
 
 #[must_use]
+pub fn generated_depth_two_value_unique_signature_left_supply_atlas_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoValueUniqueSignatureSourceSweepReport {
+    let seed_rows = non_fixture_composed_domain_seed_rows();
+    let current_white_patterns = generated_combined_component_patterns(
+        generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        ),
+        generated_white_mixed_color_hook_component_patterns(),
+    );
+    let current_black_patterns = generated_combined_component_patterns(
+        generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        ),
+        generated_black_mixed_color_hook_component_patterns(),
+    );
+    let expanded_white_patterns = generated_combined_component_patterns(
+        current_white_patterns.clone(),
+        generated_white_expanded_mixed_color_hook_component_patterns(),
+    );
+    let expanded_black_patterns = generated_combined_component_patterns(
+        current_black_patterns,
+        generated_black_expanded_mixed_color_hook_component_patterns(),
+    );
+    let interior_white_patterns = generated_white_interior_mixed_color_hook_component_patterns();
+    let near_wall_white_patterns = generated_white_near_wall_mixed_color_hook_component_patterns();
+    let outer_white_patterns = generated_white_outer_mixed_color_hook_component_patterns();
+    let diagonal_white_patterns = generated_white_diagonal_mixed_color_hook_component_patterns();
+    let unbounded_expanded_interior_white_patterns =
+        generated_unbounded_combined_component_patterns(
+            generated_unbounded_combined_component_patterns(
+                current_white_patterns.clone(),
+                generated_white_expanded_mixed_color_hook_component_patterns(),
+            ),
+            interior_white_patterns.clone(),
+        );
+    let unbounded_expanded_near_wall_white_patterns =
+        generated_unbounded_combined_component_patterns(
+            generated_unbounded_combined_component_patterns(
+                current_white_patterns.clone(),
+                generated_white_expanded_mixed_color_hook_component_patterns(),
+            ),
+            near_wall_white_patterns.clone(),
+        );
+    let unbounded_expanded_outer_white_patterns = generated_unbounded_combined_component_patterns(
+        generated_unbounded_combined_component_patterns(
+            current_white_patterns.clone(),
+            generated_white_expanded_mixed_color_hook_component_patterns(),
+        ),
+        outer_white_patterns.clone(),
+    );
+    let unbounded_expanded_diagonal_white_patterns =
+        generated_unbounded_combined_component_patterns(
+            generated_unbounded_combined_component_patterns(
+                current_white_patterns.clone(),
+                generated_white_expanded_mixed_color_hook_component_patterns(),
+            ),
+            diagonal_white_patterns.clone(),
+        );
+    let unbounded_all_left_supply_white_patterns = generated_unbounded_combined_component_patterns(
+        generated_unbounded_combined_component_patterns(
+            generated_unbounded_combined_component_patterns(
+                unbounded_expanded_interior_white_patterns.clone(),
+                near_wall_white_patterns,
+            ),
+            outer_white_patterns,
+        ),
+        diagonal_white_patterns,
+    );
+
+    let sources = vec![
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "bounded_expanded_left_vs_expanded_right_v0",
+            expanded_white_patterns,
+            expanded_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "unbounded_expanded_plus_interior_left_vs_expanded_right_v0",
+            unbounded_expanded_interior_white_patterns,
+            expanded_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "near_wall_left_supply_vs_expanded_right_v0",
+            generated_white_near_wall_mixed_color_hook_component_patterns(),
+            expanded_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "outer_left_supply_vs_expanded_right_v0",
+            generated_white_outer_mixed_color_hook_component_patterns(),
+            expanded_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "diagonal_left_supply_vs_expanded_right_v0",
+            generated_white_diagonal_mixed_color_hook_component_patterns(),
+            expanded_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "unbounded_expanded_plus_near_wall_left_vs_expanded_right_v0",
+            unbounded_expanded_near_wall_white_patterns,
+            expanded_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "unbounded_expanded_plus_outer_left_vs_expanded_right_v0",
+            unbounded_expanded_outer_white_patterns,
+            expanded_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "unbounded_expanded_plus_diagonal_left_vs_expanded_right_v0",
+            unbounded_expanded_diagonal_white_patterns,
+            expanded_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "unbounded_all_left_supply_vs_expanded_right_v0",
+            unbounded_all_left_supply_white_patterns,
+            expanded_black_patterns,
+        ),
+    ];
+
+    GeneratedDepthTwoValueUniqueSignatureSourceSweepReport {
+        rows_per_family_target,
+        sources,
+    }
+}
+
+#[must_use]
 pub fn generated_depth_two_signature_bounded_support_report(
     rows_per_family_target: usize,
     candidate_pair_limit_per_family: usize,
@@ -5758,6 +5903,102 @@ fn generated_white_interior_mixed_color_hook_component_patterns() -> Vec<Vec<(Sq
         (Square::E3, &['P', 'N', 'p', 'n'][..]),
         (Square::C4, &['P', 'N'][..]),
         (Square::E4, &['P', 'N'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_white_near_wall_mixed_color_hook_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::C1, 'N'), (Square::C2, 'P'), (Square::C3, 'p')],
+        vec![(Square::C1, 'B'), (Square::B2, 'P'), (Square::C3, 'n')],
+        vec![(Square::B1, 'R'), (Square::C2, 'p'), (Square::B3, 'P')],
+        vec![(Square::C1, 'Q'), (Square::B2, 'n'), (Square::C3, 'P')],
+        vec![
+            (Square::B1, 'N'),
+            (Square::C2, 'P'),
+            (Square::B3, 'p'),
+            (Square::C4, 'P'),
+        ],
+        vec![
+            (Square::C1, 'R'),
+            (Square::B2, 'P'),
+            (Square::C3, 'n'),
+            (Square::B4, 'P'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::B1, &['N', 'B', 'R'][..]),
+        (Square::C1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::B2, &['P', 'N', 'p', 'n'][..]),
+        (Square::C2, &['P', 'N', 'p', 'n'][..]),
+        (Square::B3, &['P', 'N', 'p', 'n'][..]),
+        (Square::C3, &['P', 'N', 'p', 'n'][..]),
+        (Square::B4, &['P', 'N'][..]),
+        (Square::C4, &['P', 'N'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_white_outer_mixed_color_hook_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::A1, 'B'), (Square::A2, 'P'), (Square::A3, 'p')],
+        vec![(Square::B1, 'N'), (Square::A2, 'p'), (Square::B3, 'P')],
+        vec![(Square::A1, 'R'), (Square::B2, 'n'), (Square::A3, 'P')],
+        vec![(Square::B1, 'Q'), (Square::A2, 'P'), (Square::C2, 'p')],
+        vec![
+            (Square::A1, 'N'),
+            (Square::B2, 'P'),
+            (Square::A3, 'p'),
+            (Square::C3, 'P'),
+        ],
+        vec![
+            (Square::B1, 'R'),
+            (Square::A2, 'P'),
+            (Square::B3, 'n'),
+            (Square::A4, 'P'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::A1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::B1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::A2, &['P', 'N', 'p', 'n'][..]),
+        (Square::B2, &['P', 'N', 'p', 'n'][..]),
+        (Square::C2, &['P', 'N', 'p'][..]),
+        (Square::A3, &['P', 'N', 'p'][..]),
+        (Square::B3, &['P', 'N', 'p', 'n'][..]),
+        (Square::C3, &['P', 'N'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_white_diagonal_mixed_color_hook_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::A1, 'N'), (Square::B2, 'P'), (Square::C3, 'p')],
+        vec![(Square::A1, 'B'), (Square::B2, 'n'), (Square::C3, 'P')],
+        vec![(Square::B1, 'R'), (Square::C2, 'P'), (Square::A3, 'p')],
+        vec![(Square::C1, 'Q'), (Square::B2, 'p'), (Square::A3, 'P')],
+        vec![
+            (Square::A1, 'R'),
+            (Square::B2, 'P'),
+            (Square::C3, 'n'),
+            (Square::C4, 'P'),
+        ],
+        vec![
+            (Square::C1, 'N'),
+            (Square::B2, 'P'),
+            (Square::A3, 'p'),
+            (Square::B4, 'N'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::A1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::B1, &['N', 'B', 'R'][..]),
+        (Square::C1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::A2, &['P', 'N', 'p'][..]),
+        (Square::B2, &['P', 'N', 'p', 'n'][..]),
+        (Square::C2, &['P', 'N', 'p', 'n'][..]),
+        (Square::A3, &['P', 'N', 'p'][..]),
+        (Square::C3, &['P', 'N', 'p', 'n'][..]),
     ]));
     unique_generated_component_patterns(patterns)
 }
