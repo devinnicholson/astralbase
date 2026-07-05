@@ -677,6 +677,24 @@ pub struct GeneratedDepthTwoSignatureProfileSearchReport {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoSignatureBoundedSupportReport {
+    pub source: String,
+    pub component_signature_rule: String,
+    pub rows_per_family_target: usize,
+    pub candidate_pair_limit_per_family: usize,
+    pub left_signature_profile_count: usize,
+    pub right_signature_profile_count: usize,
+    pub candidate_pair_counts_by_topology_family: BTreeMap<String, usize>,
+    pub candidate_offsets_by_topology_family: BTreeMap<String, usize>,
+    pub selected_row_count: usize,
+    pub selected_counts_by_topology_family: BTreeMap<String, usize>,
+    pub reached_target_by_topology_family: BTreeMap<String, bool>,
+    pub candidate_pair_limit_hit_by_topology_family: BTreeMap<String, bool>,
+    pub rejection_counts: BTreeMap<String, usize>,
+    pub candidates: Vec<GeneratedDepthTwoSignatureProfileCandidateReport>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneratedDepthTwoSignatureProfileCandidateReport {
     pub row_number: usize,
     pub topology_family: String,
@@ -908,6 +926,41 @@ pub fn generated_depth_two_signature_profile_search_report(
     generated_depth_two_signature_profile_search_report_with_seed_and_patterns(
         &seed_rows,
         rows_per_family_target,
+        "corner_plus_edge_minor_ladder_v0",
+        generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        ),
+        generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        ),
+    )
+}
+
+#[must_use]
+pub fn generated_depth_two_signature_bounded_support_report(
+    rows_per_family_target: usize,
+    candidate_pair_limit_per_family: usize,
+) -> GeneratedDepthTwoSignatureBoundedSupportReport {
+    let mut seed_rows = Vec::new();
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS
+            .iter()
+            .map(non_fixture_composed_board_exact_row),
+    );
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                non_fixture_composed_domain_rejected_row(index + 1, candidate)
+            }),
+    );
+    generated_depth_two_signature_bounded_support_report_with_seed_and_patterns(
+        &seed_rows,
+        rows_per_family_target,
+        candidate_pair_limit_per_family,
         "corner_plus_edge_minor_ladder_v0",
         generated_combined_component_patterns(
             generated_white_component_patterns(),
@@ -1193,6 +1246,7 @@ pub fn signature_target_diagnostic_shard(rows_per_family: usize) -> Vec<DatasetL
             generated_black_component_patterns(),
             generated_black_edge_minor_ladder_component_patterns(),
         ),
+        None,
     );
 
     selection
@@ -1592,6 +1646,7 @@ struct GeneratedDepthTwoSignatureProfileSelection {
     left_signature_profile_count: usize,
     right_signature_profile_count: usize,
     candidate_pair_counts: Vec<usize>,
+    candidate_offsets: Vec<usize>,
     family_counts: Vec<usize>,
     rejection_counts: BTreeMap<String, usize>,
     candidates: Vec<GeneratedDepthTwoSelectedSignatureCandidate>,
@@ -2481,6 +2536,7 @@ fn generated_depth_two_signature_profile_search_report_with_seed_and_patterns(
         rows_per_family_target,
         white_patterns,
         black_patterns,
+        None,
     );
     let topology_families = generated_depth_two_topology_families();
     let selected_counts_by_topology_family = topology_families
@@ -2493,7 +2549,100 @@ fn generated_depth_two_signature_profile_search_report_with_seed_and_patterns(
         .enumerate()
         .map(|(index, family)| ((*family).to_owned(), selection.candidate_pair_counts[index]))
         .collect::<BTreeMap<_, _>>();
-    let candidates = selection
+    let candidates = generated_depth_two_signature_candidate_reports(&selection);
+
+    GeneratedDepthTwoSignatureProfileSearchReport {
+        source: source.to_owned(),
+        component_signature_rule:
+            "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
+        rows_per_family_target,
+        left_signature_profile_count: selection.left_signature_profile_count,
+        right_signature_profile_count: selection.right_signature_profile_count,
+        candidate_pair_counts_by_topology_family,
+        selected_row_count: candidates.len(),
+        selected_counts_by_topology_family,
+        rejection_counts: selection.rejection_counts,
+        candidates,
+    }
+}
+
+fn generated_depth_two_signature_bounded_support_report_with_seed_and_patterns(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    candidate_pair_limit_per_family: usize,
+    source: &str,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoSignatureBoundedSupportReport {
+    let selection = generated_depth_two_signature_profile_selection_with_patterns(
+        seed_rows,
+        rows_per_family_target,
+        white_patterns,
+        black_patterns,
+        Some(candidate_pair_limit_per_family),
+    );
+    let topology_families = generated_depth_two_topology_families();
+    let selected_counts_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| ((*family).to_owned(), selection.family_counts[index]))
+        .collect::<BTreeMap<_, _>>();
+    let candidate_pair_counts_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| ((*family).to_owned(), selection.candidate_pair_counts[index]))
+        .collect::<BTreeMap<_, _>>();
+    let candidate_offsets_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| ((*family).to_owned(), selection.candidate_offsets[index]))
+        .collect::<BTreeMap<_, _>>();
+    let reached_target_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| {
+            (
+                (*family).to_owned(),
+                selection.family_counts[index] >= rows_per_family_target,
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let candidate_pair_limit_hit_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| {
+            (
+                (*family).to_owned(),
+                selection.candidate_offsets[index] >= candidate_pair_limit_per_family
+                    && candidate_pair_limit_per_family < selection.candidate_pair_counts[index],
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let candidates = generated_depth_two_signature_candidate_reports(&selection);
+
+    GeneratedDepthTwoSignatureBoundedSupportReport {
+        source: source.to_owned(),
+        component_signature_rule:
+            "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
+        rows_per_family_target,
+        candidate_pair_limit_per_family,
+        left_signature_profile_count: selection.left_signature_profile_count,
+        right_signature_profile_count: selection.right_signature_profile_count,
+        candidate_pair_counts_by_topology_family,
+        candidate_offsets_by_topology_family,
+        selected_row_count: candidates.len(),
+        selected_counts_by_topology_family,
+        reached_target_by_topology_family,
+        candidate_pair_limit_hit_by_topology_family,
+        rejection_counts: selection.rejection_counts,
+        candidates,
+    }
+}
+
+fn generated_depth_two_signature_candidate_reports(
+    selection: &GeneratedDepthTwoSignatureProfileSelection,
+) -> Vec<GeneratedDepthTwoSignatureProfileCandidateReport> {
+    selection
         .candidates
         .iter()
         .map(
@@ -2512,21 +2661,7 @@ fn generated_depth_two_signature_profile_search_report_with_seed_and_patterns(
                 current_result_value_digest: candidate.current_result_value_digest.clone(),
             },
         )
-        .collect::<Vec<_>>();
-
-    GeneratedDepthTwoSignatureProfileSearchReport {
-        source: source.to_owned(),
-        component_signature_rule:
-            "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
-        rows_per_family_target,
-        left_signature_profile_count: selection.left_signature_profile_count,
-        right_signature_profile_count: selection.right_signature_profile_count,
-        candidate_pair_counts_by_topology_family,
-        selected_row_count: candidates.len(),
-        selected_counts_by_topology_family,
-        rejection_counts: selection.rejection_counts,
-        candidates,
-    }
+        .collect()
 }
 
 fn generated_depth_two_leakage_clean_profile_selection(
@@ -2768,6 +2903,7 @@ fn generated_depth_two_signature_profile_selection_with_patterns(
     rows_per_family_target: usize,
     white_patterns: Vec<Vec<(Square, char)>>,
     black_patterns: Vec<Vec<(Square, char)>>,
+    candidate_pair_limit_per_family: Option<usize>,
 ) -> GeneratedDepthTwoSignatureProfileSelection {
     let white_profiles = generated_depth_two_signature_profiles(white_patterns);
     let black_profiles = generated_depth_two_signature_profiles(black_patterns);
@@ -2819,7 +2955,10 @@ fn generated_depth_two_signature_profile_selection_with_patterns(
                 continue;
             }
 
-            while candidate_offsets[family_index] < candidate_pairs[family_index].len() {
+            let candidate_pair_limit = candidate_pair_limit_per_family
+                .unwrap_or(candidate_pairs[family_index].len())
+                .min(candidate_pairs[family_index].len());
+            while candidate_offsets[family_index] < candidate_pair_limit {
                 let (left_index, right_index, total_recursive_nodes) =
                     candidate_pairs[family_index][candidate_offsets[family_index]];
                 candidate_offsets[family_index] += 1;
@@ -2958,6 +3097,7 @@ fn generated_depth_two_signature_profile_selection_with_patterns(
         left_signature_profile_count: white_profiles.len(),
         right_signature_profile_count: black_profiles.len(),
         candidate_pair_counts,
+        candidate_offsets,
         family_counts,
         rejection_counts,
         candidates,

@@ -854,6 +854,42 @@ fn generated_depth_two_signature_profile_search_reaches_target_support() {
 }
 
 #[test]
+fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
+    let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
+
+    assert_eq!(report.source, "corner_plus_edge_minor_ladder_v0");
+    assert_eq!(report.rows_per_family_target, 20);
+    assert_eq!(report.candidate_pair_limit_per_family, 1);
+    assert_eq!(report.left_signature_profile_count, 90);
+    assert_eq!(report.right_signature_profile_count, 92);
+    assert!(report.selected_row_count <= 3);
+    assert!(
+        report
+            .candidate_offsets_by_topology_family
+            .values()
+            .all(|offset| *offset <= 1)
+    );
+    assert!(
+        report
+            .selected_counts_by_topology_family
+            .values()
+            .all(|count| *count < 20)
+    );
+    assert!(
+        report
+            .candidate_pair_limit_hit_by_topology_family
+            .values()
+            .all(|hit| *hit)
+    );
+    assert!(
+        report
+            .reached_target_by_topology_family
+            .values()
+            .all(|reached| !*reached)
+    );
+}
+
+#[test]
 fn signature_target_diagnostic_shard_is_heuristic_not_exact_supervision() {
     let rows = dataset_label::signature_target_diagnostic_shard(10);
     let jsonl = dataset_label::signature_target_diagnostic_shard_jsonl(10).unwrap();

@@ -152,6 +152,20 @@ fn main() {
             );
             return;
         }
+        Some("--generated-depth-two-signature-bounded-support") => {
+            let (rows_per_family, candidate_pair_limit) =
+                parse_generated_depth_two_signature_bounded_support_args(args);
+            let report = dataset_label::generated_depth_two_signature_bounded_support_report(
+                rows_per_family,
+                candidate_pair_limit,
+            );
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .expect("generated depth-two signature bounded support report must serialize")
+            );
+            return;
+        }
         Some("--generated-depth-two-profile-inventory") => {
             let report = dataset_label::generated_depth_two_profile_inventory_report();
             println!(
@@ -226,6 +240,7 @@ Commands:\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
   --generated-depth-two-combined-source-profile-search [--rows-per-family N]\n\
   --generated-depth-two-signature-profile-search [--rows-per-family N]\n\
+  --generated-depth-two-signature-bounded-support [--rows-per-family N] [--candidate-pair-limit N]\n\
   --generated-depth-two-profile-inventory\n\
   --generated-depth-two-profile-source-inventory\n\
   --generated-depth-two-duplicate-clusters\n\
@@ -258,6 +273,31 @@ fn parse_generated_depth_two_signature_profile_search_rows(
     )
 }
 
+fn parse_generated_depth_two_signature_bounded_support_args(
+    mut args: impl Iterator<Item = String>,
+) -> (usize, usize) {
+    let command = "--generated-depth-two-signature-bounded-support";
+    let mut rows_per_family = 20usize;
+    let mut candidate_pair_limit = 2_500usize;
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--rows-per-family" => {
+                rows_per_family =
+                    parse_positive_usize_arg(args.next(), "--rows-per-family", command);
+            }
+            "--candidate-pair-limit" => {
+                candidate_pair_limit =
+                    parse_positive_usize_arg(args.next(), "--candidate-pair-limit", command);
+            }
+            _ => {
+                eprintln!("unsupported argument for {command}: {arg}");
+                std::process::exit(2);
+            }
+        }
+    }
+    (rows_per_family, candidate_pair_limit)
+}
+
 fn parse_expanded_non_fixture_composed_domain_rows(
     mut args: impl Iterator<Item = String>,
 ) -> usize {
@@ -284,6 +324,22 @@ fn parse_signature_target_diagnostic_rows(mut args: impl Iterator<Item = String>
         "--signature-target-diagnostic-shard",
         dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
     )
+}
+
+fn parse_positive_usize_arg(value: Option<String>, flag: &str, command: &str) -> usize {
+    let value = value.unwrap_or_else(|| {
+        eprintln!("{flag} requires a positive integer");
+        std::process::exit(2);
+    });
+    let parsed = value.parse::<usize>().unwrap_or_else(|error| {
+        eprintln!("invalid {flag} for {command}: {error}");
+        std::process::exit(2);
+    });
+    if parsed == 0 {
+        eprintln!("{flag} requires a positive integer");
+        std::process::exit(2);
+    }
+    parsed
 }
 
 fn parse_rows_per_family_arg(
