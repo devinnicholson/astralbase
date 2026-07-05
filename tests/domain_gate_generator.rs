@@ -1098,6 +1098,40 @@ fn interior_mixed_hook_source_report_is_diagnostic_only() {
 }
 
 #[test]
+fn pattern_limit_atlas_is_capacity_only() {
+    let report =
+        dataset_label::generated_depth_two_value_unique_signature_pattern_limit_atlas_report(1);
+
+    assert_eq!(report.rows_per_family_target, 1);
+    assert_eq!(report.sources.len(), 4);
+    assert_eq!(
+        report
+            .sources
+            .iter()
+            .map(|source| source.source.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "bounded_expanded_mixed_color_hook_v0",
+            "bounded_expanded_plus_interior_mixed_color_hook_v0",
+            "bounded_interior_first_plus_expanded_mixed_color_hook_v0",
+            "unbounded_expanded_plus_interior_mixed_color_hook_v0",
+        ]
+    );
+    assert!(
+        report
+            .sources
+            .iter()
+            .all(|source| !source.current_selection_evaluated)
+    );
+    assert!(
+        report
+            .sources
+            .iter()
+            .all(|source| source.target_row_count == 3)
+    );
+}
+
+#[test]
 fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
     let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
 

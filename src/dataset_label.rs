@@ -1693,6 +1693,95 @@ pub fn generated_depth_two_value_unique_signature_interior_mixed_hook_source_rep
 }
 
 #[must_use]
+pub fn generated_depth_two_value_unique_signature_pattern_limit_atlas_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoValueUniqueSignatureSourceSweepReport {
+    let seed_rows = non_fixture_composed_domain_seed_rows();
+    let current_white_patterns = generated_combined_component_patterns(
+        generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        ),
+        generated_white_mixed_color_hook_component_patterns(),
+    );
+    let current_black_patterns = generated_combined_component_patterns(
+        generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        ),
+        generated_black_mixed_color_hook_component_patterns(),
+    );
+    let expanded_white_patterns = generated_combined_component_patterns(
+        current_white_patterns.clone(),
+        generated_white_expanded_mixed_color_hook_component_patterns(),
+    );
+    let expanded_black_patterns = generated_combined_component_patterns(
+        current_black_patterns.clone(),
+        generated_black_expanded_mixed_color_hook_component_patterns(),
+    );
+    let interior_white_patterns = generated_white_interior_mixed_color_hook_component_patterns();
+    let interior_black_patterns = generated_black_interior_mixed_color_hook_component_patterns();
+    let unbounded_expanded_interior_white_patterns =
+        generated_unbounded_combined_component_patterns(
+            generated_unbounded_combined_component_patterns(
+                current_white_patterns.clone(),
+                generated_white_expanded_mixed_color_hook_component_patterns(),
+            ),
+            interior_white_patterns.clone(),
+        );
+    let unbounded_expanded_interior_black_patterns =
+        generated_unbounded_combined_component_patterns(
+            generated_unbounded_combined_component_patterns(
+                current_black_patterns.clone(),
+                generated_black_expanded_mixed_color_hook_component_patterns(),
+            ),
+            interior_black_patterns.clone(),
+        );
+
+    let sources = vec![
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "bounded_expanded_mixed_color_hook_v0",
+            expanded_white_patterns.clone(),
+            expanded_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "bounded_expanded_plus_interior_mixed_color_hook_v0",
+            generated_combined_component_patterns(
+                expanded_white_patterns.clone(),
+                interior_white_patterns.clone(),
+            ),
+            generated_combined_component_patterns(
+                expanded_black_patterns.clone(),
+                interior_black_patterns.clone(),
+            ),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "bounded_interior_first_plus_expanded_mixed_color_hook_v0",
+            generated_combined_component_patterns(interior_white_patterns, expanded_white_patterns),
+            generated_combined_component_patterns(interior_black_patterns, expanded_black_patterns),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "unbounded_expanded_plus_interior_mixed_color_hook_v0",
+            unbounded_expanded_interior_white_patterns,
+            unbounded_expanded_interior_black_patterns,
+        ),
+    ];
+
+    GeneratedDepthTwoValueUniqueSignatureSourceSweepReport {
+        rows_per_family_target,
+        sources,
+    }
+}
+
+#[must_use]
 pub fn generated_depth_two_signature_bounded_support_report(
     rows_per_family_target: usize,
     candidate_pair_limit_per_family: usize,
@@ -5721,8 +5810,26 @@ fn generated_combined_component_patterns(
     unique_generated_component_patterns(first)
 }
 
+fn generated_unbounded_combined_component_patterns(
+    mut first: Vec<Vec<(Square, char)>>,
+    second: Vec<Vec<(Square, char)>>,
+) -> Vec<Vec<(Square, char)>> {
+    first.extend(second);
+    unique_generated_component_patterns_with_limit(first, usize::MAX)
+}
+
 fn unique_generated_component_patterns(
     patterns: Vec<Vec<(Square, char)>>,
+) -> Vec<Vec<(Square, char)>> {
+    unique_generated_component_patterns_with_limit(
+        patterns,
+        GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT,
+    )
+}
+
+fn unique_generated_component_patterns_with_limit(
+    patterns: Vec<Vec<(Square, char)>>,
+    limit: usize,
 ) -> Vec<Vec<(Square, char)>> {
     let mut seen = BTreeSet::new();
     let mut unique = Vec::new();
@@ -5732,7 +5839,7 @@ fn unique_generated_component_patterns(
         if seen.insert(key) {
             unique.push(pattern);
         }
-        if unique.len() == GENERATED_DEPTH_TWO_COMPONENT_PATTERN_LIMIT {
+        if unique.len() == limit {
             break;
         }
     }

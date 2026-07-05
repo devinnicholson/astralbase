@@ -303,6 +303,21 @@ fn main() {
             );
             return;
         }
+        Some("--generated-depth-two-value-unique-signature-pattern-limit-atlas") => {
+            let rows_per_family =
+                parse_generated_depth_two_value_unique_signature_pattern_limit_atlas_rows(args);
+            let report =
+                dataset_label::generated_depth_two_value_unique_signature_pattern_limit_atlas_report(
+                    rows_per_family,
+                );
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).expect(
+                    "generated depth-two value-unique signature pattern-limit atlas report must serialize",
+                )
+            );
+            return;
+        }
         Some("--generated-depth-two-signature-bounded-support") => {
             let (rows_per_family, candidate_pair_limit) =
                 parse_generated_depth_two_signature_bounded_support_args(args);
@@ -401,6 +416,7 @@ Commands:\n\
   --generated-depth-two-value-unique-signature-mixed-hook-upper-bound [--rows-per-family N]\n\
   --generated-depth-two-value-unique-signature-expanded-mixed-hook-upper-bound [--rows-per-family N]\n\
   --generated-depth-two-value-unique-signature-interior-mixed-hook-source [--rows-per-family N]\n\
+  --generated-depth-two-value-unique-signature-pattern-limit-atlas [--rows-per-family N]\n\
   --generated-depth-two-signature-bounded-support [--rows-per-family N] [--candidate-pair-limit N]\n\
   --generated-depth-two-profile-inventory\n\
   --generated-depth-two-profile-source-inventory\n\
@@ -500,6 +516,16 @@ fn parse_generated_depth_two_value_unique_signature_interior_mixed_hook_source_r
     parse_rows_per_family_arg(
         &mut args,
         "--generated-depth-two-value-unique-signature-interior-mixed-hook-source",
+        dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
+    )
+}
+
+fn parse_generated_depth_two_value_unique_signature_pattern_limit_atlas_rows(
+    mut args: impl Iterator<Item = String>,
+) -> usize {
+    parse_rows_per_family_arg(
+        &mut args,
+        "--generated-depth-two-value-unique-signature-pattern-limit-atlas",
         dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
     )
 }
