@@ -187,6 +187,21 @@ fn main() {
             );
             return;
         }
+        Some("--generated-depth-two-value-unique-signature-profile-search") => {
+            let rows_per_family =
+                parse_generated_depth_two_value_unique_signature_profile_search_rows(args);
+            let report =
+                dataset_label::generated_depth_two_value_unique_signature_profile_search_report(
+                    rows_per_family,
+                );
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).expect(
+                    "generated depth-two value-unique signature profile search report must serialize",
+                )
+            );
+            return;
+        }
         Some("--generated-depth-two-signature-bounded-support") => {
             let (rows_per_family, candidate_pair_limit) =
                 parse_generated_depth_two_signature_bounded_support_args(args);
@@ -277,6 +292,7 @@ Commands:\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
   --generated-depth-two-combined-source-profile-search [--rows-per-family N]\n\
   --generated-depth-two-signature-profile-search [--rows-per-family N]\n\
+  --generated-depth-two-value-unique-signature-profile-search [--rows-per-family N]\n\
   --generated-depth-two-signature-bounded-support [--rows-per-family N] [--candidate-pair-limit N]\n\
   --generated-depth-two-profile-inventory\n\
   --generated-depth-two-profile-source-inventory\n\
@@ -307,6 +323,16 @@ fn parse_generated_depth_two_signature_profile_search_rows(
         &mut args,
         "--generated-depth-two-signature-profile-search",
         10,
+    )
+}
+
+fn parse_generated_depth_two_value_unique_signature_profile_search_rows(
+    mut args: impl Iterator<Item = String>,
+) -> usize {
+    parse_rows_per_family_arg(
+        &mut args,
+        "--generated-depth-two-value-unique-signature-profile-search",
+        dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
     )
 }
 

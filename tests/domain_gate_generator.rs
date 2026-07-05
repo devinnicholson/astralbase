@@ -854,6 +854,43 @@ fn generated_depth_two_signature_profile_search_reaches_target_support() {
 }
 
 #[test]
+fn value_unique_signature_profile_search_exposes_exact_support_limit() {
+    let report =
+        dataset_label::generated_depth_two_value_unique_signature_profile_search_report(20);
+
+    assert_eq!(
+        report.source,
+        "corner_plus_edge_minor_ladder_value_unique_exact_metadata_v0"
+    );
+    assert_eq!(report.left_signature_profile_count, 90);
+    assert_eq!(report.right_signature_profile_count, 92);
+    assert_eq!(report.selected_row_count, 13);
+    assert_eq!(
+        report.selected_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 4),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 5),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 4),
+        ])
+    );
+    assert_eq!(
+        report.rejection_counts,
+        std::collections::BTreeMap::from([
+            (
+                "component_signature_reuse_before_materialization".to_owned(),
+                6412
+            ),
+            (
+                "component_value_digest_reuse_before_materialization".to_owned(),
+                18391
+            ),
+            ("decomposition_digest_reuse".to_owned(), 11),
+            ("materialization_failure".to_owned(), 13),
+        ])
+    );
+}
+
+#[test]
 fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
     let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
 
