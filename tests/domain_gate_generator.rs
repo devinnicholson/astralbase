@@ -894,6 +894,7 @@ fn value_unique_signature_profile_search_exposes_exact_support_limit() {
 fn value_unique_signature_upper_bound_shows_component_value_ceiling() {
     let report = dataset_label::generated_depth_two_value_unique_signature_upper_bound_report(20);
 
+    assert!(report.current_selection_evaluated);
     assert_eq!(report.left_unique_component_value_digest_count, 15);
     assert_eq!(report.right_unique_component_value_digest_count, 14);
     assert_eq!(report.shared_component_value_digest_count, 0);
@@ -911,6 +912,39 @@ fn value_unique_signature_upper_bound_shows_component_value_ceiling() {
             ("dfile_two_component_depth2_local_move_v0".to_owned(), 210),
             ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 210),
         ])
+    );
+}
+
+#[test]
+fn value_unique_signature_source_sweep_identifies_capacity_dead_ends() {
+    let report = dataset_label::generated_depth_two_value_unique_signature_source_sweep_report(20);
+
+    assert_eq!(report.rows_per_family_target, 20);
+    assert_eq!(report.sources.len(), 5);
+    assert!(
+        report
+            .sources
+            .iter()
+            .all(|source| !source.current_selection_evaluated)
+    );
+    assert_eq!(
+        report
+            .sources
+            .iter()
+            .map(|source| (
+                source.source.as_str(),
+                source.left_unique_component_value_digest_count,
+                source.right_unique_component_value_digest_count,
+                source.component_value_capacity_upper_bound
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            ("corner_baseline_v0", 14, 13, 13),
+            ("edge_minor_ladder_v0", 14, 13, 13),
+            ("corner_plus_edge_minor_ladder_v0", 15, 14, 14),
+            ("rank4_minor_ladder_v0", 9, 12, 9),
+            ("corner_plus_edge_plus_rank4_minor_ladder_v0", 15, 14, 14),
+        ]
     );
 }
 

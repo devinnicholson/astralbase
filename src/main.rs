@@ -217,6 +217,21 @@ fn main() {
             );
             return;
         }
+        Some("--generated-depth-two-value-unique-signature-source-sweep") => {
+            let rows_per_family =
+                parse_generated_depth_two_value_unique_signature_source_sweep_rows(args);
+            let report =
+                dataset_label::generated_depth_two_value_unique_signature_source_sweep_report(
+                    rows_per_family,
+                );
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).expect(
+                    "generated depth-two value-unique signature source-sweep report must serialize",
+                )
+            );
+            return;
+        }
         Some("--generated-depth-two-signature-bounded-support") => {
             let (rows_per_family, candidate_pair_limit) =
                 parse_generated_depth_two_signature_bounded_support_args(args);
@@ -309,6 +324,7 @@ Commands:\n\
   --generated-depth-two-signature-profile-search [--rows-per-family N]\n\
   --generated-depth-two-value-unique-signature-profile-search [--rows-per-family N]\n\
   --generated-depth-two-value-unique-signature-upper-bound [--rows-per-family N]\n\
+  --generated-depth-two-value-unique-signature-source-sweep [--rows-per-family N]\n\
   --generated-depth-two-signature-bounded-support [--rows-per-family N] [--candidate-pair-limit N]\n\
   --generated-depth-two-profile-inventory\n\
   --generated-depth-two-profile-source-inventory\n\
@@ -358,6 +374,16 @@ fn parse_generated_depth_two_value_unique_signature_upper_bound_rows(
     parse_rows_per_family_arg(
         &mut args,
         "--generated-depth-two-value-unique-signature-upper-bound",
+        dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
+    )
+}
+
+fn parse_generated_depth_two_value_unique_signature_source_sweep_rows(
+    mut args: impl Iterator<Item = String>,
+) -> usize {
+    parse_rows_per_family_arg(
+        &mut args,
+        "--generated-depth-two-value-unique-signature-source-sweep",
         dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
     )
 }

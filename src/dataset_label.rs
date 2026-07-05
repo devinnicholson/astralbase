@@ -726,6 +726,7 @@ pub struct GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
     pub source: String,
     pub component_signature_rule: String,
     pub rows_per_family_target: usize,
+    pub current_selection_evaluated: bool,
     pub left_signature_profile_count: usize,
     pub right_signature_profile_count: usize,
     pub left_unique_component_value_digest_count: usize,
@@ -739,6 +740,12 @@ pub struct GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
     pub current_selected_row_count: usize,
     pub current_selected_counts_by_topology_family: BTreeMap<String, usize>,
     pub current_rejection_counts: BTreeMap<String, usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoValueUniqueSignatureSourceSweepReport {
+    pub rows_per_family_target: usize,
+    pub sources: Vec<GeneratedDepthTwoValueUniqueSignatureUpperBoundReport>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1351,6 +1358,74 @@ pub fn generated_depth_two_value_unique_signature_upper_bound_report(
             generated_black_edge_minor_ladder_component_patterns(),
         ),
     )
+}
+
+#[must_use]
+pub fn generated_depth_two_value_unique_signature_source_sweep_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoValueUniqueSignatureSourceSweepReport {
+    let seed_rows = non_fixture_composed_domain_seed_rows();
+    let corner_white_patterns = generated_white_component_patterns();
+    let corner_black_patterns = generated_black_component_patterns();
+    let edge_white_patterns = generated_white_edge_minor_ladder_component_patterns();
+    let edge_black_patterns = generated_black_edge_minor_ladder_component_patterns();
+    let rank4_white_patterns = generated_white_rank4_minor_ladder_component_patterns();
+    let rank5_black_patterns = generated_black_rank5_minor_ladder_component_patterns();
+
+    let sources = vec![
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "corner_baseline_v0",
+            corner_white_patterns.clone(),
+            corner_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "edge_minor_ladder_v0",
+            edge_white_patterns.clone(),
+            edge_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "corner_plus_edge_minor_ladder_v0",
+            generated_combined_component_patterns(
+                corner_white_patterns.clone(),
+                edge_white_patterns.clone(),
+            ),
+            generated_combined_component_patterns(
+                corner_black_patterns.clone(),
+                edge_black_patterns.clone(),
+            ),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "rank4_minor_ladder_v0",
+            rank4_white_patterns.clone(),
+            rank5_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "corner_plus_edge_plus_rank4_minor_ladder_v0",
+            generated_combined_component_patterns(
+                generated_combined_component_patterns(corner_white_patterns, edge_white_patterns),
+                rank4_white_patterns,
+            ),
+            generated_combined_component_patterns(
+                generated_combined_component_patterns(corner_black_patterns, edge_black_patterns),
+                rank5_black_patterns,
+            ),
+        ),
+    ];
+
+    GeneratedDepthTwoValueUniqueSignatureSourceSweepReport {
+        rows_per_family_target,
+        sources,
+    }
 }
 
 #[must_use]
@@ -3188,6 +3263,41 @@ fn generated_depth_two_value_unique_signature_upper_bound_report_with_patterns(
     white_patterns: Vec<Vec<(Square, char)>>,
     black_patterns: Vec<Vec<(Square, char)>>,
 ) -> GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
+    generated_depth_two_value_unique_signature_upper_bound_report_with_patterns_and_selection(
+        seed_rows,
+        rows_per_family_target,
+        source,
+        white_patterns,
+        black_patterns,
+        true,
+    )
+}
+
+fn generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    source: &str,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
+    generated_depth_two_value_unique_signature_upper_bound_report_with_patterns_and_selection(
+        seed_rows,
+        rows_per_family_target,
+        source,
+        white_patterns,
+        black_patterns,
+        false,
+    )
+}
+
+fn generated_depth_two_value_unique_signature_upper_bound_report_with_patterns_and_selection(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    source: &str,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+    evaluate_current_selection: bool,
+) -> GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
     let white_profiles = generated_depth_two_signature_profiles(white_patterns.clone());
     let black_profiles = generated_depth_two_signature_profiles(black_patterns.clone());
     let left_value_digests = white_profiles
@@ -3241,25 +3351,44 @@ fn generated_depth_two_value_unique_signature_upper_bound_report_with_patterns(
             .insert((*topology_family).to_owned(), value_pairs.len());
     }
 
-    let selection = generated_depth_two_value_unique_signature_profile_selection_with_patterns(
-        seed_rows,
-        rows_per_family_target,
-        white_patterns,
-        black_patterns,
-        None,
-    );
-    let current_selected_counts_by_topology_family = topology_families
-        .iter()
-        .enumerate()
-        .map(|(index, family)| ((*family).to_owned(), selection.family_counts[index]))
-        .collect::<BTreeMap<_, _>>();
-    let current_selected_row_count = selection.candidates.len();
+    let (
+        current_selected_counts_by_topology_family,
+        current_selected_row_count,
+        current_rejection_counts,
+    ) = if evaluate_current_selection {
+        let selection = generated_depth_two_value_unique_signature_profile_selection_with_patterns(
+            seed_rows,
+            rows_per_family_target,
+            white_patterns,
+            black_patterns,
+            None,
+        );
+        (
+            topology_families
+                .iter()
+                .enumerate()
+                .map(|(index, family)| ((*family).to_owned(), selection.family_counts[index]))
+                .collect::<BTreeMap<_, _>>(),
+            selection.candidates.len(),
+            selection.rejection_counts,
+        )
+    } else {
+        (
+            topology_families
+                .iter()
+                .map(|family| ((*family).to_owned(), 0))
+                .collect::<BTreeMap<_, _>>(),
+            0,
+            BTreeMap::new(),
+        )
+    };
 
     GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
         source: source.to_owned(),
         component_signature_rule:
             "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
         rows_per_family_target,
+        current_selection_evaluated: evaluate_current_selection,
         left_signature_profile_count: white_profiles.len(),
         right_signature_profile_count: black_profiles.len(),
         left_unique_component_value_digest_count: left_value_digests.len(),
@@ -3272,7 +3401,7 @@ fn generated_depth_two_value_unique_signature_upper_bound_report_with_patterns(
         distinct_candidate_value_pair_counts_by_topology_family,
         current_selected_row_count,
         current_selected_counts_by_topology_family,
-        current_rejection_counts: selection.rejection_counts,
+        current_rejection_counts,
     }
 }
 
@@ -4836,6 +4965,64 @@ fn generated_black_edge_minor_ladder_component_patterns() -> Vec<Vec<(Square, ch
         (Square::G7, &['p', 'n', 'b'][..]),
         (Square::H6, &['p', 'n'][..]),
         (Square::G6, &['p', 'n'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_white_rank4_minor_ladder_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::A1, 'N'), (Square::A4, 'P'), (Square::B4, 'P')],
+        vec![(Square::A1, 'B'), (Square::A3, 'P'), (Square::B4, 'N')],
+        vec![(Square::B1, 'N'), (Square::A3, 'P'), (Square::A4, 'P')],
+        vec![
+            (Square::A1, 'R'),
+            (Square::B1, 'N'),
+            (Square::A4, 'P'),
+            (Square::B4, 'P'),
+        ],
+        vec![
+            (Square::A1, 'Q'),
+            (Square::B1, 'B'),
+            (Square::A3, 'P'),
+            (Square::B4, 'P'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::A1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::B1, &['N', 'B', 'R'][..]),
+        (Square::A3, &['P', 'N', 'B'][..]),
+        (Square::B3, &['P', 'N', 'B'][..]),
+        (Square::A4, &['P', 'N'][..]),
+        (Square::B4, &['P', 'N'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_black_rank5_minor_ladder_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::H8, 'n'), (Square::H5, 'p'), (Square::G5, 'p')],
+        vec![(Square::H8, 'b'), (Square::H6, 'p'), (Square::G5, 'n')],
+        vec![(Square::G8, 'n'), (Square::H6, 'p'), (Square::H5, 'p')],
+        vec![
+            (Square::H8, 'r'),
+            (Square::G8, 'n'),
+            (Square::H5, 'p'),
+            (Square::G5, 'p'),
+        ],
+        vec![
+            (Square::H8, 'q'),
+            (Square::G8, 'b'),
+            (Square::H6, 'p'),
+            (Square::G5, 'p'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::H8, &['n', 'b', 'r', 'q'][..]),
+        (Square::G8, &['n', 'b', 'r'][..]),
+        (Square::H6, &['p', 'n', 'b'][..]),
+        (Square::G6, &['p', 'n', 'b'][..]),
+        (Square::H5, &['p', 'n'][..]),
+        (Square::G5, &['p', 'n'][..]),
     ]));
     unique_generated_component_patterns(patterns)
 }
