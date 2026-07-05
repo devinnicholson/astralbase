@@ -854,6 +854,84 @@ fn generated_depth_two_signature_profile_search_reaches_target_support() {
 }
 
 #[test]
+fn signature_target_diagnostic_shard_is_heuristic_not_exact_supervision() {
+    let rows = dataset_label::signature_target_diagnostic_shard(10);
+    let jsonl = dataset_label::signature_target_diagnostic_shard_jsonl(10).unwrap();
+
+    assert_eq!(rows.len(), 30);
+    assert_eq!(
+        dataset_label::parse_and_validate_jsonl(&jsonl).unwrap(),
+        rows
+    );
+    assert!(
+        rows.iter()
+            .all(|row| row.label_kind() == LabelKind::Heuristic)
+    );
+    assert!(rows.iter().all(|row| {
+        row.row_id
+            .starts_with("astralbase-w39-signature-target-diagnostic-")
+    }));
+
+    let mut topology_counts = std::collections::BTreeMap::new();
+    for row in &rows {
+        let LabelPayload::Heuristic { heuristic } = &row.label else {
+            panic!("signature diagnostic rows must be heuristic rows");
+        };
+        assert_eq!(heuristic.method, "signature_profile_target_diagnostic");
+        assert_eq!(heuristic.method_version, "v0");
+        assert_eq!(
+            heuristic
+                .outputs
+                .get("target_contract_id")
+                .map(String::as_str),
+            Some("depth2_material_mobility_signature_target_contract_v0")
+        );
+        assert_eq!(
+            heuristic
+                .outputs
+                .get("component_signature_rule")
+                .map(String::as_str),
+            Some("depth2_value_digest_plus_material_balance_plus_local_move_counts_v0")
+        );
+        assert_eq!(
+            heuristic.outputs.get("target_status").map(String::as_str),
+            Some("diagnostic_only")
+        );
+        assert_eq!(
+            heuristic
+                .outputs
+                .get("supervision_eligible")
+                .map(String::as_str),
+            Some("false")
+        );
+        assert!(
+            heuristic
+                .outputs
+                .get("promotion_blockers")
+                .is_some_and(|blockers| blockers.contains("split_semantics_missing"))
+        );
+        let topology = heuristic
+            .outputs
+            .get("component_topology_family")
+            .expect("heuristic row carries topology family")
+            .clone();
+        *topology_counts.entry(topology).or_insert(0usize) += 1;
+    }
+
+    assert_eq!(
+        topology_counts,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                10
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 10),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 10),
+        ])
+    );
+}
+
+#[test]
 fn generated_depth_two_duplicate_clusters_expose_signature_collapse() {
     let report = dataset_label::generated_depth_two_duplicate_cluster_report();
 

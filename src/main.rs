@@ -82,6 +82,15 @@ fn main() {
             );
             return;
         }
+        Some("--signature-target-diagnostic-shard") => {
+            let rows_per_family = parse_signature_target_diagnostic_rows(args);
+            print!(
+                "{}",
+                dataset_label::signature_target_diagnostic_shard_jsonl(rows_per_family)
+                    .expect("signature target diagnostic shard must serialize")
+            );
+            return;
+        }
         Some("--replay-non-fixture-composed-domain-shard") => {
             let path = parse_replay_non_fixture_composed_domain_path(args);
             let input = std::fs::read_to_string(path.as_str()).unwrap_or_else(|error| {
@@ -212,6 +221,7 @@ Commands:\n\
   --non-fixture-composed-domain-shard [--limit N]\n\
   --expanded-non-fixture-composed-domain-shard [--rows-per-family N]\n\
   --leakage-clean-non-fixture-composed-domain-shard [--rows-per-family N]\n\
+  --signature-target-diagnostic-shard [--rows-per-family N]\n\
   --replay-non-fixture-composed-domain-shard PATH\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
   --generated-depth-two-combined-source-profile-search [--rows-per-family N]\n\
@@ -265,6 +275,14 @@ fn parse_leakage_clean_non_fixture_composed_domain_rows(
         &mut args,
         "--leakage-clean-non-fixture-composed-domain-shard",
         dataset_label::DEFAULT_LEAKAGE_CLEAN_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY,
+    )
+}
+
+fn parse_signature_target_diagnostic_rows(mut args: impl Iterator<Item = String>) -> usize {
+    parse_rows_per_family_arg(
+        &mut args,
+        "--signature-target-diagnostic-shard",
+        dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
     )
 }
 

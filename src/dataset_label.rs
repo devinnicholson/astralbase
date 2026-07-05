@@ -26,6 +26,7 @@ pub const DEFAULT_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 20;
 pub const DEFAULT_EXPANDED_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY: usize = 10;
 pub const DEFAULT_EXPANDED_NON_FIXTURE_COMPOSED_DOMAIN_SHARD_LIMIT: usize = 44;
 pub const DEFAULT_LEAKAGE_CLEAN_NON_FIXTURE_COMPOSED_DOMAIN_ROWS_PER_FAMILY: usize = 10;
+pub const DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY: usize = 10;
 pub const COMPOSITION_FIXTURE_DOMAIN_ID: &str = "formal_domain:bitmesh_composition_fixture:v0";
 pub const COMPOSITION_FIXTURE_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#wave-17-composition-fixture";
@@ -1024,6 +1025,12 @@ pub fn leakage_clean_non_fixture_composed_domain_shard_jsonl(
     ))
 }
 
+pub fn signature_target_diagnostic_shard_jsonl(
+    rows_per_family: usize,
+) -> Result<String, serde_json::Error> {
+    serialize_jsonl(&signature_target_diagnostic_shard(rows_per_family))
+}
+
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
     let mut rows = SAMPLE_LABEL_CANDIDATES
@@ -1157,6 +1164,42 @@ pub fn leakage_clean_non_fixture_composed_domain_shard(
         rows_per_family,
     ));
     rows
+}
+
+#[must_use]
+pub fn signature_target_diagnostic_shard(rows_per_family: usize) -> Vec<DatasetLabelRow> {
+    let mut seed_rows = Vec::new();
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS
+            .iter()
+            .map(non_fixture_composed_board_exact_row),
+    );
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                non_fixture_composed_domain_rejected_row(index + 1, candidate)
+            }),
+    );
+    let selection = generated_depth_two_signature_profile_selection_with_patterns(
+        &seed_rows,
+        rows_per_family,
+        generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        ),
+        generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        ),
+    );
+
+    selection
+        .candidates
+        .iter()
+        .map(signature_target_diagnostic_row)
+        .collect()
 }
 
 fn non_fixture_composed_domain_seed_rows() -> Vec<DatasetLabelRow> {
@@ -1464,6 +1507,13 @@ const DEPTH_TWO_PHALANX_TOPOLOGY_FAMILY: &str = "dfile_two_component_depth2_pawn
 const CURATED_NON_FIXTURE_BOARD_SPEC_SOURCE: &str = "curated_non_fixture_board_spec_v0";
 const PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE: &str =
     "profiled_depth2_component_pair_generator_v0";
+const SIGNATURE_TARGET_DIAGNOSTIC_SOURCE: &str = "signature_profile_target_diagnostic_v0";
+const SIGNATURE_TARGET_DIAGNOSTIC_ROW_ID_PREFIX: &str =
+    "astralbase-w39-signature-target-diagnostic";
+const SIGNATURE_TARGET_CONTRACT_ID: &str = "depth2_material_mobility_signature_target_contract_v0";
+const SIGNATURE_TARGET_COMPONENT_RULE: &str =
+    "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0";
+const SIGNATURE_TARGET_PROMOTION_BLOCKERS: &str = "versioned_exact_value_rule_missing;replay_compatible_provenance_missing;split_semantics_missing;deterministic_and_model_baselines_missing";
 const GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY: usize = 2;
 const GENERATED_DEPTH_TWO_MAX_COMPONENT_RECURSIVE_NODES: usize = 220;
 const GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES: usize = 1_000;
@@ -2256,6 +2306,99 @@ fn generated_depth_two_leakage_clean_composed_board_exact_rows(
     }
 
     rows
+}
+
+fn signature_target_diagnostic_row(
+    candidate: &GeneratedDepthTwoSelectedSignatureCandidate,
+) -> DatasetLabelRow {
+    let row_id = format!(
+        "{}-{:03}",
+        SIGNATURE_TARGET_DIAGNOSTIC_ROW_ID_PREFIX, candidate.row_number
+    );
+    let spec = NonFixtureComposedBoardSpec {
+        row_id: &row_id,
+        active_pieces: &candidate.active_pieces,
+        fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
+            + u32::try_from(candidate.row_number).expect("generated row number fits fullmove u32"),
+        value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+        topology_family: candidate.topology_family,
+        spec_source: SIGNATURE_TARGET_DIAGNOSTIC_SOURCE,
+    };
+    let fen = non_fixture_composed_board_fen(&spec);
+    DatasetLabelRow::heuristic(
+        row_id,
+        NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID,
+        DatasetPosition::fen(fen),
+        HeuristicLabel {
+            method: "signature_profile_target_diagnostic".to_owned(),
+            method_version: "v0".to_owned(),
+            outputs: BTreeMap::from([
+                (
+                    "target_contract_id".to_owned(),
+                    SIGNATURE_TARGET_CONTRACT_ID.to_owned(),
+                ),
+                ("target_status".to_owned(), "diagnostic_only".to_owned()),
+                ("supervision_eligible".to_owned(), "false".to_owned()),
+                (
+                    "component_signature_rule".to_owned(),
+                    SIGNATURE_TARGET_COMPONENT_RULE.to_owned(),
+                ),
+                (
+                    "promotion_blockers".to_owned(),
+                    SIGNATURE_TARGET_PROMOTION_BLOCKERS.to_owned(),
+                ),
+                (
+                    "component_topology_family".to_owned(),
+                    candidate.topology_family.to_owned(),
+                ),
+                (
+                    "composition_spec_source".to_owned(),
+                    SIGNATURE_TARGET_DIAGNOSTIC_SOURCE.to_owned(),
+                ),
+                ("row_number".to_owned(), candidate.row_number.to_string()),
+                (
+                    "left_profile_index".to_owned(),
+                    candidate.left_profile_index.to_string(),
+                ),
+                (
+                    "right_profile_index".to_owned(),
+                    candidate.right_profile_index.to_string(),
+                ),
+                (
+                    "total_recursive_nodes".to_owned(),
+                    candidate.total_recursive_nodes.to_string(),
+                ),
+                (
+                    "active_pieces".to_owned(),
+                    generated_depth_two_active_piece_summary(&candidate.active_pieces),
+                ),
+                (
+                    "left_component_value_digest".to_owned(),
+                    candidate.left_component_value_digest.clone(),
+                ),
+                (
+                    "right_component_value_digest".to_owned(),
+                    candidate.right_component_value_digest.clone(),
+                ),
+                (
+                    "current_result_value_digest".to_owned(),
+                    candidate.current_result_value_digest.clone(),
+                ),
+                (
+                    "left_component_signature".to_owned(),
+                    candidate.left_component_signature.clone(),
+                ),
+                (
+                    "right_component_signature".to_owned(),
+                    candidate.right_component_signature.clone(),
+                ),
+                (
+                    "result_signature_key".to_owned(),
+                    candidate.result_signature_key.clone(),
+                ),
+            ]),
+        },
+    )
 }
 
 fn generated_depth_two_profile_search_report_with_seed(
