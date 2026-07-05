@@ -662,6 +662,36 @@ pub struct GeneratedDepthTwoProfileSourceSearchReport {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoSignatureProfileSearchReport {
+    pub source: String,
+    pub component_signature_rule: String,
+    pub rows_per_family_target: usize,
+    pub left_signature_profile_count: usize,
+    pub right_signature_profile_count: usize,
+    pub candidate_pair_counts_by_topology_family: BTreeMap<String, usize>,
+    pub selected_row_count: usize,
+    pub selected_counts_by_topology_family: BTreeMap<String, usize>,
+    pub rejection_counts: BTreeMap<String, usize>,
+    pub candidates: Vec<GeneratedDepthTwoSignatureProfileCandidateReport>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoSignatureProfileCandidateReport {
+    pub row_number: usize,
+    pub topology_family: String,
+    pub left_profile_index: usize,
+    pub right_profile_index: usize,
+    pub total_recursive_nodes: usize,
+    pub active_pieces: String,
+    pub left_component_value_digest: String,
+    pub right_component_value_digest: String,
+    pub left_component_signature: String,
+    pub right_component_signature: String,
+    pub result_signature_key: String,
+    pub current_result_value_digest: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneratedDepthTwoProfileCandidateReport {
     pub row_number: usize,
     pub topology_family: String,
@@ -854,6 +884,39 @@ pub fn generated_depth_two_combined_source_profile_search_report(
             ),
         ),
     }
+}
+
+#[must_use]
+pub fn generated_depth_two_signature_profile_search_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoSignatureProfileSearchReport {
+    let mut seed_rows = Vec::new();
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS
+            .iter()
+            .map(non_fixture_composed_board_exact_row),
+    );
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                non_fixture_composed_domain_rejected_row(index + 1, candidate)
+            }),
+    );
+    generated_depth_two_signature_profile_search_report_with_seed_and_patterns(
+        &seed_rows,
+        rows_per_family_target,
+        "corner_plus_edge_minor_ladder_v0",
+        generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        ),
+        generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        ),
+    )
 }
 
 #[must_use]
@@ -1427,6 +1490,15 @@ struct GeneratedDepthTwoComponentProfile {
 }
 
 #[derive(Clone, Debug)]
+struct GeneratedDepthTwoSignatureProfile {
+    active_pieces: Vec<(Square, char)>,
+    value: CGTValue,
+    value_digest: String,
+    component_signature: String,
+    recursive_nodes: usize,
+}
+
+#[derive(Clone, Debug)]
 struct GeneratedDepthTwoSelectedProfileCandidate {
     row_number: usize,
     topology_family: &'static str,
@@ -1440,6 +1512,22 @@ struct GeneratedDepthTwoSelectedProfileCandidate {
 }
 
 #[derive(Clone, Debug)]
+struct GeneratedDepthTwoSelectedSignatureCandidate {
+    row_number: usize,
+    topology_family: &'static str,
+    left_profile_index: usize,
+    right_profile_index: usize,
+    total_recursive_nodes: usize,
+    active_pieces: Vec<(Square, char)>,
+    left_component_value_digest: String,
+    right_component_value_digest: String,
+    left_component_signature: String,
+    right_component_signature: String,
+    result_signature_key: String,
+    current_result_value_digest: String,
+}
+
+#[derive(Clone, Debug)]
 struct GeneratedDepthTwoProfileSelection {
     left_profile_count: usize,
     right_profile_count: usize,
@@ -1447,6 +1535,16 @@ struct GeneratedDepthTwoProfileSelection {
     family_counts: Vec<usize>,
     rejection_counts: BTreeMap<String, usize>,
     candidates: Vec<GeneratedDepthTwoSelectedProfileCandidate>,
+}
+
+#[derive(Clone, Debug)]
+struct GeneratedDepthTwoSignatureProfileSelection {
+    left_signature_profile_count: usize,
+    right_signature_profile_count: usize,
+    candidate_pair_counts: Vec<usize>,
+    family_counts: Vec<usize>,
+    rejection_counts: BTreeMap<String, usize>,
+    candidates: Vec<GeneratedDepthTwoSelectedSignatureCandidate>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2228,6 +2326,66 @@ fn generated_depth_two_profile_search_report_from_selection(
     }
 }
 
+fn generated_depth_two_signature_profile_search_report_with_seed_and_patterns(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    source: &str,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoSignatureProfileSearchReport {
+    let selection = generated_depth_two_signature_profile_selection_with_patterns(
+        seed_rows,
+        rows_per_family_target,
+        white_patterns,
+        black_patterns,
+    );
+    let topology_families = generated_depth_two_topology_families();
+    let selected_counts_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| ((*family).to_owned(), selection.family_counts[index]))
+        .collect::<BTreeMap<_, _>>();
+    let candidate_pair_counts_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| ((*family).to_owned(), selection.candidate_pair_counts[index]))
+        .collect::<BTreeMap<_, _>>();
+    let candidates = selection
+        .candidates
+        .iter()
+        .map(
+            |candidate| GeneratedDepthTwoSignatureProfileCandidateReport {
+                row_number: candidate.row_number,
+                topology_family: candidate.topology_family.to_owned(),
+                left_profile_index: candidate.left_profile_index,
+                right_profile_index: candidate.right_profile_index,
+                total_recursive_nodes: candidate.total_recursive_nodes,
+                active_pieces: generated_depth_two_active_piece_summary(&candidate.active_pieces),
+                left_component_value_digest: candidate.left_component_value_digest.clone(),
+                right_component_value_digest: candidate.right_component_value_digest.clone(),
+                left_component_signature: candidate.left_component_signature.clone(),
+                right_component_signature: candidate.right_component_signature.clone(),
+                result_signature_key: candidate.result_signature_key.clone(),
+                current_result_value_digest: candidate.current_result_value_digest.clone(),
+            },
+        )
+        .collect::<Vec<_>>();
+
+    GeneratedDepthTwoSignatureProfileSearchReport {
+        source: source.to_owned(),
+        component_signature_rule:
+            "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
+        rows_per_family_target,
+        left_signature_profile_count: selection.left_signature_profile_count,
+        right_signature_profile_count: selection.right_signature_profile_count,
+        candidate_pair_counts_by_topology_family,
+        selected_row_count: candidates.len(),
+        selected_counts_by_topology_family,
+        rejection_counts: selection.rejection_counts,
+        candidates,
+    }
+}
+
 fn generated_depth_two_leakage_clean_profile_selection(
     seed_rows: &[DatasetLabelRow],
     rows_per_family_target: usize,
@@ -2455,6 +2613,207 @@ fn generated_depth_two_leakage_clean_profile_selection_with_patterns(
     GeneratedDepthTwoProfileSelection {
         left_profile_count: white_profiles.len(),
         right_profile_count: black_profiles.len(),
+        candidate_pair_counts,
+        family_counts,
+        rejection_counts,
+        candidates,
+    }
+}
+
+fn generated_depth_two_signature_profile_selection_with_patterns(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoSignatureProfileSelection {
+    let white_profiles = generated_depth_two_signature_profiles(white_patterns);
+    let black_profiles = generated_depth_two_signature_profiles(black_patterns);
+    let topology_families = generated_depth_two_topology_families();
+
+    let mut seen_positions = BTreeSet::new();
+    let mut seen_decomposition_digests = BTreeSet::new();
+    let mut seen_composition_digests = BTreeSet::new();
+    let mut seen_component_identities = BTreeSet::new();
+    for row in seed_rows {
+        seen_positions.insert(row.position.text.clone());
+        if let Some(summary) = composition_identity_summary_for_row(row) {
+            seen_decomposition_digests.insert(summary.decomposition_digest);
+            seen_composition_digests.insert(summary.composition_digest);
+            seen_component_identities.extend(summary.component_identities);
+        }
+    }
+
+    let mut seen_component_signatures = BTreeSet::new();
+    let mut seen_result_signature_keys = BTreeSet::new();
+    let mut candidate_offsets = vec![0usize; topology_families.len()];
+    let candidate_pairs = topology_families
+        .iter()
+        .enumerate()
+        .map(|(family_index, _family)| {
+            generated_depth_two_signature_profile_candidate_pairs(
+                family_index,
+                &white_profiles,
+                &black_profiles,
+            )
+        })
+        .collect::<Vec<_>>();
+    let candidate_pair_counts = candidate_pairs
+        .iter()
+        .map(std::vec::Vec::len)
+        .collect::<Vec<_>>();
+    let mut family_counts = vec![0usize; topology_families.len()];
+    let mut rejection_counts = BTreeMap::new();
+    let mut candidates = Vec::new();
+    let mut next_row_number = NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS.len() + 1;
+
+    while family_counts
+        .iter()
+        .any(|count| *count < rows_per_family_target)
+    {
+        let mut made_progress = false;
+        for (family_index, topology_family) in topology_families.iter().enumerate() {
+            if family_counts[family_index] == rows_per_family_target {
+                continue;
+            }
+
+            while candidate_offsets[family_index] < candidate_pairs[family_index].len() {
+                let (left_index, right_index, total_recursive_nodes) =
+                    candidate_pairs[family_index][candidate_offsets[family_index]];
+                candidate_offsets[family_index] += 1;
+                let left = &white_profiles[left_index];
+                let right = &black_profiles[right_index];
+                if left.component_signature == right.component_signature {
+                    increment_count(&mut rejection_counts, "same_component_signature");
+                    continue;
+                }
+                if seen_component_signatures.contains(&left.component_signature)
+                    || seen_component_signatures.contains(&right.component_signature)
+                {
+                    increment_count(
+                        &mut rejection_counts,
+                        "component_signature_reuse_before_materialization",
+                    );
+                    continue;
+                }
+                let result_signature_key = generated_depth_two_result_signature_key(
+                    topology_family,
+                    &left.component_signature,
+                    &right.component_signature,
+                );
+                if seen_result_signature_keys.contains(&result_signature_key) {
+                    increment_count(
+                        &mut rejection_counts,
+                        "result_signature_reuse_before_materialization",
+                    );
+                    continue;
+                }
+
+                let mut active_pieces = left.active_pieces.clone();
+                active_pieces.extend(right.active_pieces.iter().copied());
+                active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
+                let board_position_key = generated_depth_two_board_position_key(&active_pieces);
+                if seen_positions.contains(&board_position_key) {
+                    increment_count(
+                        &mut rejection_counts,
+                        "position_reuse_before_materialization",
+                    );
+                    continue;
+                }
+
+                let row_id = format!(
+                    "{}-{:03}",
+                    NON_FIXTURE_COMPOSED_BOARD_SHARD_CONFIG.row_id_prefix, next_row_number
+                );
+                let spec = NonFixtureComposedBoardSpec {
+                    row_id: &row_id,
+                    active_pieces: &active_pieces,
+                    fullmove_number: GENERATED_DEPTH_TWO_START_FULLMOVE
+                        + u32::try_from(next_row_number)
+                            .expect("generated row number fits fullmove u32"),
+                    value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+                    topology_family,
+                    spec_source: PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE,
+                };
+                let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
+                    increment_count(&mut rejection_counts, "materialization_failure");
+                    continue;
+                };
+                if !generated_depth_two_row_within_node_budget(&row) {
+                    increment_count(&mut rejection_counts, "row_recursive_node_budget");
+                    continue;
+                }
+                let Some(summary) = composition_identity_summary_for_row(&row) else {
+                    increment_count(&mut rejection_counts, "missing_identity_summary");
+                    continue;
+                };
+                if has_duplicates(&summary.component_identities) {
+                    increment_count(
+                        &mut rejection_counts,
+                        "intra_row_component_identity_duplicate",
+                    );
+                    continue;
+                }
+                if seen_positions.contains(&row.position.text) {
+                    increment_count(&mut rejection_counts, "row_position_reuse");
+                    continue;
+                }
+                if seen_decomposition_digests.contains(&summary.decomposition_digest) {
+                    increment_count(&mut rejection_counts, "decomposition_digest_reuse");
+                    continue;
+                }
+                if seen_composition_digests.contains(&summary.composition_digest) {
+                    increment_count(&mut rejection_counts, "composition_digest_reuse");
+                    continue;
+                }
+                if summary
+                    .component_identities
+                    .iter()
+                    .any(|identity| seen_component_identities.contains(identity))
+                {
+                    increment_count(&mut rejection_counts, "component_identity_reuse");
+                    continue;
+                }
+
+                let current_result_value =
+                    CGTValue::sum_all(&[left.value.clone(), right.value.clone()]);
+                let current_result_value_digest = current_result_value.exact_value_payload().digest;
+                seen_positions.insert(board_position_key);
+                seen_positions.insert(row.position.text.clone());
+                seen_decomposition_digests.insert(summary.decomposition_digest);
+                seen_composition_digests.insert(summary.composition_digest);
+                seen_component_identities.extend(summary.component_identities);
+                seen_component_signatures.insert(left.component_signature.clone());
+                seen_component_signatures.insert(right.component_signature.clone());
+                seen_result_signature_keys.insert(result_signature_key.clone());
+                candidates.push(GeneratedDepthTwoSelectedSignatureCandidate {
+                    row_number: next_row_number,
+                    topology_family,
+                    left_profile_index: left_index,
+                    right_profile_index: right_index,
+                    total_recursive_nodes,
+                    active_pieces,
+                    left_component_value_digest: left.value_digest.clone(),
+                    right_component_value_digest: right.value_digest.clone(),
+                    left_component_signature: left.component_signature.clone(),
+                    right_component_signature: right.component_signature.clone(),
+                    result_signature_key,
+                    current_result_value_digest,
+                });
+                next_row_number += 1;
+                family_counts[family_index] += 1;
+                made_progress = true;
+                break;
+            }
+        }
+
+        if !made_progress {
+            break;
+        }
+    }
+
+    GeneratedDepthTwoSignatureProfileSelection {
+        left_signature_profile_count: white_profiles.len(),
+        right_signature_profile_count: black_profiles.len(),
         candidate_pair_counts,
         family_counts,
         rejection_counts,
@@ -2891,6 +3250,97 @@ fn generated_depth_two_wall_safe_component_profiles(
             })
             .collect(),
     )
+}
+
+fn generated_depth_two_signature_profiles(
+    patterns: Vec<Vec<(Square, char)>>,
+) -> Vec<GeneratedDepthTwoSignatureProfile> {
+    let mut profiles = Vec::new();
+    let mut seen_signatures = BTreeSet::new();
+    for active_pieces in patterns {
+        let board = non_fixture_component_profile_board(&active_pieces);
+        if !generated_component_pattern_respects_wall(&board, &active_pieces) {
+            continue;
+        }
+        let Some(profile) = generated_depth_two_component_profile(active_pieces) else {
+            continue;
+        };
+        if profile.recursive_nodes > GENERATED_DEPTH_TWO_MAX_COMPONENT_RECURSIVE_NODES {
+            continue;
+        }
+        let Some((material_balance, local_move_counts)) =
+            generated_depth_two_component_signature(&profile.active_pieces)
+        else {
+            continue;
+        };
+        let component_signature = generated_depth_two_component_signature_key(
+            &profile.value_digest,
+            material_balance,
+            local_move_counts,
+        );
+        if seen_signatures.insert(component_signature.clone()) {
+            profiles.push(GeneratedDepthTwoSignatureProfile {
+                active_pieces: profile.active_pieces,
+                value: profile.value,
+                value_digest: profile.value_digest,
+                component_signature,
+                recursive_nodes: profile.recursive_nodes,
+            });
+        }
+    }
+    profiles
+}
+
+fn generated_depth_two_signature_profile_candidate_pairs(
+    family_index: usize,
+    white_profiles: &[GeneratedDepthTwoSignatureProfile],
+    black_profiles: &[GeneratedDepthTwoSignatureProfile],
+) -> Vec<(usize, usize, usize)> {
+    let mut pairs = Vec::new();
+    for (left_index, left) in white_profiles.iter().enumerate() {
+        for (right_index, right) in black_profiles.iter().enumerate() {
+            let total_recursive_nodes = left.recursive_nodes + right.recursive_nodes;
+            if total_recursive_nodes > GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES
+                || left.component_signature == right.component_signature
+            {
+                continue;
+            }
+            pairs.push((left_index, right_index, total_recursive_nodes));
+        }
+    }
+
+    let product = white_profiles
+        .len()
+        .saturating_mul(black_profiles.len())
+        .max(1);
+    pairs.sort_by_key(|(left_index, right_index, total_recursive_nodes)| {
+        (
+            (left_index * 37 + right_index * 53 + family_index * 97) % product,
+            *total_recursive_nodes,
+            *left_index,
+            *right_index,
+        )
+    });
+    pairs
+}
+
+fn generated_depth_two_component_signature_key(
+    value_digest: &str,
+    material_balance: i32,
+    local_move_counts: ComponentLocalMoveCounts,
+) -> String {
+    format!(
+        "value:{value_digest};material:{material_balance};moves:white:{},black:{}",
+        local_move_counts.white, local_move_counts.black
+    )
+}
+
+fn generated_depth_two_result_signature_key(
+    topology_family: &str,
+    left_component_signature: &str,
+    right_component_signature: &str,
+) -> String {
+    format!("{topology_family};left:{left_component_signature};right:{right_component_signature}")
 }
 
 fn generated_depth_two_component_profile(

@@ -804,6 +804,56 @@ fn generated_depth_two_combined_source_profile_search_reports_no_gain() {
 }
 
 #[test]
+fn generated_depth_two_signature_profile_search_reaches_target_support() {
+    let report = dataset_label::generated_depth_two_signature_profile_search_report(10);
+
+    assert_eq!(report.source, "corner_plus_edge_minor_ladder_v0");
+    assert_eq!(
+        report.component_signature_rule,
+        "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0"
+    );
+    assert_eq!(report.left_signature_profile_count, 90);
+    assert_eq!(report.right_signature_profile_count, 92);
+    assert_eq!(
+        report.candidate_pair_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                8280
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 8280),
+            (
+                "dfile_two_component_depth2_pawn_phalanx_v0".to_owned(),
+                8280
+            ),
+        ])
+    );
+    assert_eq!(report.selected_row_count, 30);
+    assert_eq!(
+        report.selected_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                10
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 10),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 10),
+        ])
+    );
+    assert_eq!(
+        report.rejection_counts,
+        std::collections::BTreeMap::from([
+            (
+                "component_signature_reuse_before_materialization".to_owned(),
+                4806
+            ),
+            ("decomposition_digest_reuse".to_owned(), 21),
+            ("materialization_failure".to_owned(), 1),
+        ])
+    );
+}
+
+#[test]
 fn generated_depth_two_duplicate_clusters_expose_signature_collapse() {
     let report = dataset_label::generated_depth_two_duplicate_cluster_report();
 
