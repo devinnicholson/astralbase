@@ -100,6 +100,15 @@ fn main() {
             );
             return;
         }
+        Some("--signature-target-mixed-hook-exact-shard") => {
+            let rows_per_family = parse_signature_target_mixed_hook_exact_rows(args);
+            print!(
+                "{}",
+                dataset_label::signature_target_mixed_hook_exact_shard_jsonl(rows_per_family)
+                    .expect("signature target mixed-hook exact shard must serialize")
+            );
+            return;
+        }
         Some("--signature-target-replay-preflight") => {
             let path = parse_signature_target_replay_preflight_path(args);
             let input = std::fs::read_to_string(path.as_str()).unwrap_or_else(|error| {
@@ -347,6 +356,7 @@ Commands:\n\
   --leakage-clean-non-fixture-composed-domain-shard [--rows-per-family N]\n\
   --signature-target-diagnostic-shard [--rows-per-family N]\n\
   --signature-target-exact-shard [--rows-per-family N]\n\
+  --signature-target-mixed-hook-exact-shard [--rows-per-family N]\n\
   --signature-target-replay-preflight PATH\n\
   --replay-non-fixture-composed-domain-shard PATH\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
@@ -497,6 +507,14 @@ fn parse_signature_target_exact_rows(mut args: impl Iterator<Item = String>) -> 
     parse_rows_per_family_arg(
         &mut args,
         "--signature-target-exact-shard",
+        dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
+    )
+}
+
+fn parse_signature_target_mixed_hook_exact_rows(mut args: impl Iterator<Item = String>) -> usize {
+    parse_rows_per_family_arg(
+        &mut args,
+        "--signature-target-mixed-hook-exact-shard",
         dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
     )
 }

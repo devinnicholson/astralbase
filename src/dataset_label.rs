@@ -1746,6 +1746,12 @@ pub fn signature_target_exact_shard_jsonl(
     serialize_jsonl(&signature_target_exact_shard(rows_per_family))
 }
 
+pub fn signature_target_mixed_hook_exact_shard_jsonl(
+    rows_per_family: usize,
+) -> Result<String, serde_json::Error> {
+    serialize_jsonl(&signature_target_mixed_hook_exact_shard(rows_per_family))
+}
+
 #[must_use]
 pub fn sample_audited_shard() -> Vec<DatasetLabelRow> {
     let mut rows = SAMPLE_LABEL_CANDIDATES
@@ -1951,6 +1957,35 @@ pub fn signature_target_exact_shard(rows_per_family: usize) -> Vec<DatasetLabelR
         .candidates
         .iter()
         .map(signature_target_exact_row)
+        .collect()
+}
+
+#[must_use]
+pub fn signature_target_mixed_hook_exact_shard(rows_per_family: usize) -> Vec<DatasetLabelRow> {
+    let seed_rows = non_fixture_composed_domain_seed_rows();
+    let selection = generated_depth_two_value_unique_signature_profile_selection_with_patterns(
+        &seed_rows,
+        rows_per_family,
+        generated_combined_component_patterns(
+            generated_combined_component_patterns(
+                generated_white_component_patterns(),
+                generated_white_edge_minor_ladder_component_patterns(),
+            ),
+            generated_white_mixed_color_hook_component_patterns(),
+        ),
+        generated_combined_component_patterns(
+            generated_combined_component_patterns(
+                generated_black_component_patterns(),
+                generated_black_edge_minor_ladder_component_patterns(),
+            ),
+            generated_black_mixed_color_hook_component_patterns(),
+        ),
+        None,
+    );
+    selection
+        .candidates
+        .iter()
+        .map(signature_target_mixed_hook_exact_row)
         .collect()
 }
 
@@ -2266,6 +2301,12 @@ const SIGNATURE_TARGET_DIAGNOSTIC_ROW_ID_PREFIX: &str =
     "astralbase-w39-signature-target-diagnostic";
 const SIGNATURE_TARGET_EXACT_SOURCE: &str = "signature_target_replay_exact_metadata_v0";
 const SIGNATURE_TARGET_EXACT_ROW_ID_PREFIX: &str = "astralbase-w47-signature-target-exact";
+const SIGNATURE_TARGET_MIXED_HOOK_EXACT_SOURCE: &str =
+    "signature_target_mixed_hook_replay_exact_metadata_v0";
+const SIGNATURE_TARGET_MIXED_HOOK_DIAGNOSTIC_ROW_ID_PREFIX: &str =
+    "astralbase-w52-mixed-hook-signature-target-diagnostic";
+const SIGNATURE_TARGET_MIXED_HOOK_EXACT_ROW_ID_PREFIX: &str =
+    "astralbase-w52-mixed-hook-signature-target-exact";
 const SIGNATURE_TARGET_EXACT_RULE: &str = "depth2_material_mobility_signature_exact_metadata_v0";
 const SIGNATURE_TARGET_CONTRACT_ID: &str = "depth2_material_mobility_signature_target_contract_v0";
 const SIGNATURE_TARGET_COMPONENT_RULE: &str =
@@ -3183,10 +3224,32 @@ fn signature_target_diagnostic_row(
 fn signature_target_exact_row(
     candidate: &GeneratedDepthTwoSelectedSignatureCandidate,
 ) -> DatasetLabelRow {
-    let row_id = format!(
-        "{}-{:03}",
-        SIGNATURE_TARGET_EXACT_ROW_ID_PREFIX, candidate.row_number
-    );
+    signature_target_exact_row_with_context(
+        candidate,
+        SIGNATURE_TARGET_EXACT_ROW_ID_PREFIX,
+        SIGNATURE_TARGET_DIAGNOSTIC_ROW_ID_PREFIX,
+        SIGNATURE_TARGET_EXACT_SOURCE,
+    )
+}
+
+fn signature_target_mixed_hook_exact_row(
+    candidate: &GeneratedDepthTwoSelectedSignatureCandidate,
+) -> DatasetLabelRow {
+    signature_target_exact_row_with_context(
+        candidate,
+        SIGNATURE_TARGET_MIXED_HOOK_EXACT_ROW_ID_PREFIX,
+        SIGNATURE_TARGET_MIXED_HOOK_DIAGNOSTIC_ROW_ID_PREFIX,
+        SIGNATURE_TARGET_MIXED_HOOK_EXACT_SOURCE,
+    )
+}
+
+fn signature_target_exact_row_with_context(
+    candidate: &GeneratedDepthTwoSelectedSignatureCandidate,
+    row_id_prefix: &str,
+    diagnostic_row_id_prefix: &str,
+    spec_source: &'static str,
+) -> DatasetLabelRow {
+    let row_id = format!("{}-{:03}", row_id_prefix, candidate.row_number);
     let spec = NonFixtureComposedBoardSpec {
         row_id: &row_id,
         active_pieces: &candidate.active_pieces,
@@ -3194,7 +3257,7 @@ fn signature_target_exact_row(
             + u32::try_from(candidate.row_number).expect("generated row number fits fullmove u32"),
         value_rule: NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
         topology_family: candidate.topology_family,
-        spec_source: SIGNATURE_TARGET_EXACT_SOURCE,
+        spec_source,
     };
     let mut row = try_non_fixture_composed_board_exact_row(&spec)
         .expect("signature target exact row must replay");
@@ -3216,10 +3279,7 @@ fn signature_target_exact_row(
         ),
         (
             "source_signature_diagnostic_row_id".to_owned(),
-            format!(
-                "{}-{:03}",
-                SIGNATURE_TARGET_DIAGNOSTIC_ROW_ID_PREFIX, candidate.row_number
-            ),
+            format!("{}-{:03}", diagnostic_row_id_prefix, candidate.row_number),
         ),
         (
             "component_signature_rule".to_owned(),
