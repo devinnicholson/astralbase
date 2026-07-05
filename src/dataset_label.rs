@@ -1627,6 +1627,72 @@ pub fn generated_depth_two_value_unique_signature_expanded_mixed_hook_upper_boun
 }
 
 #[must_use]
+pub fn generated_depth_two_value_unique_signature_interior_mixed_hook_source_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoValueUniqueSignatureSourceSweepReport {
+    let seed_rows = non_fixture_composed_domain_seed_rows();
+    let interior_white_patterns = generated_white_interior_mixed_color_hook_component_patterns();
+    let interior_black_patterns = generated_black_interior_mixed_color_hook_component_patterns();
+    let current_white_patterns = generated_combined_component_patterns(
+        generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        ),
+        generated_white_mixed_color_hook_component_patterns(),
+    );
+    let current_black_patterns = generated_combined_component_patterns(
+        generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        ),
+        generated_black_mixed_color_hook_component_patterns(),
+    );
+    let expanded_white_patterns = generated_combined_component_patterns(
+        current_white_patterns.clone(),
+        generated_white_expanded_mixed_color_hook_component_patterns(),
+    );
+    let expanded_black_patterns = generated_combined_component_patterns(
+        current_black_patterns.clone(),
+        generated_black_expanded_mixed_color_hook_component_patterns(),
+    );
+
+    let sources = vec![
+        generated_depth_two_value_unique_signature_upper_bound_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "interior_mixed_color_hook_v0",
+            interior_white_patterns.clone(),
+            interior_black_patterns.clone(),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "interior_first_plus_current_mixed_color_hook_v0",
+            generated_combined_component_patterns(
+                interior_white_patterns.clone(),
+                current_white_patterns,
+            ),
+            generated_combined_component_patterns(
+                interior_black_patterns.clone(),
+                current_black_patterns,
+            ),
+        ),
+        generated_depth_two_value_unique_signature_capacity_report_with_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            "interior_first_plus_expanded_mixed_color_hook_v0",
+            generated_combined_component_patterns(interior_white_patterns, expanded_white_patterns),
+            generated_combined_component_patterns(interior_black_patterns, expanded_black_patterns),
+        ),
+    ];
+
+    GeneratedDepthTwoValueUniqueSignatureSourceSweepReport {
+        rows_per_family_target,
+        sources,
+    }
+}
+
+#[must_use]
 pub fn generated_depth_two_signature_bounded_support_report(
     rows_per_family_target: usize,
     candidate_pair_limit_per_family: usize,
@@ -5562,6 +5628,86 @@ fn generated_black_expanded_mixed_color_hook_component_patterns() -> Vec<Vec<(Sq
         (Square::G6, &['p', 'n', 'P'][..]),
         (Square::F6, &['p', 'n', 'P', 'N'][..]),
         (Square::E6, &['p', 'n', 'P', 'N'][..]),
+        (Square::E5, &['p', 'n'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_white_interior_mixed_color_hook_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::C1, 'N'), (Square::C2, 'P'), (Square::E3, 'p')],
+        vec![
+            (Square::C1, 'B'),
+            (Square::C2, 'P'),
+            (Square::E3, 'p'),
+            (Square::C4, 'N'),
+        ],
+        vec![(Square::B1, 'R'), (Square::C2, 'p'), (Square::E2, 'P')],
+        vec![(Square::C1, 'Q'), (Square::B2, 'P'), (Square::E3, 'p')],
+        vec![
+            (Square::B1, 'N'),
+            (Square::C2, 'P'),
+            (Square::E3, 'p'),
+            (Square::C4, 'P'),
+        ],
+        vec![
+            (Square::C2, 'P'),
+            (Square::B3, 'N'),
+            (Square::E3, 'p'),
+            (Square::C4, 'P'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::B1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::C1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::E1, &['N', 'B', 'R'][..]),
+        (Square::B2, &['P', 'N', 'p'][..]),
+        (Square::C2, &['P', 'N', 'p', 'n'][..]),
+        (Square::E2, &['P', 'N', 'p', 'n'][..]),
+        (Square::B3, &['P', 'N', 'p'][..]),
+        (Square::C3, &['P', 'N', 'p', 'n'][..]),
+        (Square::E3, &['P', 'N', 'p', 'n'][..]),
+        (Square::C4, &['P', 'N'][..]),
+        (Square::E4, &['P', 'N'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_black_interior_mixed_color_hook_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::F8, 'n'), (Square::F7, 'p'), (Square::E6, 'P')],
+        vec![
+            (Square::F8, 'b'),
+            (Square::F7, 'p'),
+            (Square::E6, 'P'),
+            (Square::F5, 'n'),
+        ],
+        vec![(Square::G8, 'r'), (Square::F7, 'P'), (Square::E7, 'p')],
+        vec![(Square::F8, 'q'), (Square::G7, 'p'), (Square::E6, 'P')],
+        vec![
+            (Square::G8, 'n'),
+            (Square::F7, 'p'),
+            (Square::E6, 'P'),
+            (Square::F5, 'p'),
+        ],
+        vec![
+            (Square::F7, 'p'),
+            (Square::G6, 'n'),
+            (Square::E6, 'P'),
+            (Square::F5, 'p'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::G8, &['n', 'b', 'r', 'q'][..]),
+        (Square::F8, &['n', 'b', 'r', 'q'][..]),
+        (Square::E8, &['n', 'b', 'r'][..]),
+        (Square::G7, &['p', 'n', 'P'][..]),
+        (Square::F7, &['p', 'n', 'P', 'N'][..]),
+        (Square::E7, &['p', 'n', 'P', 'N'][..]),
+        (Square::G6, &['p', 'n', 'P'][..]),
+        (Square::F6, &['p', 'n', 'P', 'N'][..]),
+        (Square::E6, &['p', 'n', 'P', 'N'][..]),
+        (Square::F5, &['p', 'n'][..]),
         (Square::E5, &['p', 'n'][..]),
     ]));
     unique_generated_component_patterns(patterns)

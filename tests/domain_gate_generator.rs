@@ -1061,6 +1061,43 @@ fn expanded_mixed_hook_upper_bound_is_diagnostic_only() {
 }
 
 #[test]
+fn interior_mixed_hook_source_report_is_diagnostic_only() {
+    let report =
+        dataset_label::generated_depth_two_value_unique_signature_interior_mixed_hook_source_report(
+            1,
+        );
+
+    assert_eq!(report.rows_per_family_target, 1);
+    assert_eq!(report.sources.len(), 3);
+    assert_eq!(
+        report
+            .sources
+            .iter()
+            .map(|source| source.source.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "interior_mixed_color_hook_v0",
+            "interior_first_plus_current_mixed_color_hook_v0",
+            "interior_first_plus_expanded_mixed_color_hook_v0",
+        ]
+    );
+    assert!(report.sources[0].current_selection_evaluated);
+    assert!(
+        report
+            .sources
+            .iter()
+            .skip(1)
+            .all(|source| !source.current_selection_evaluated)
+    );
+    assert!(
+        report
+            .sources
+            .iter()
+            .all(|source| source.target_row_count == 3)
+    );
+}
+
+#[test]
 fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
     let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
 
