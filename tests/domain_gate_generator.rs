@@ -1241,6 +1241,50 @@ fn left_supply_bounded_selection_exposes_selector_bottleneck() {
 }
 
 #[test]
+fn left_supply_value_spread_selection_is_not_enough() {
+    let report =
+        dataset_label::generated_depth_two_value_unique_signature_left_supply_value_spread_bounded_selection_report(
+            50, 2500,
+        );
+
+    assert_eq!(
+        report.source,
+        "unbounded_expanded_plus_outer_left_vs_expanded_right_value_spread_v0"
+    );
+    assert_eq!(report.rows_per_family_target, 50);
+    assert_eq!(report.candidate_pair_limit_per_family, 2500);
+    assert_eq!(report.selected_row_count, 4);
+    assert_eq!(
+        report.selected_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 1),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 2),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 1),
+        ])
+    );
+    assert!(
+        report
+            .candidate_pair_limit_hit_by_topology_family
+            .values()
+            .all(|hit| *hit)
+    );
+    assert_eq!(
+        report.rejection_counts,
+        std::collections::BTreeMap::from([
+            (
+                "component_signature_reuse_before_materialization".to_owned(),
+                1164
+            ),
+            (
+                "component_value_digest_reuse_before_materialization".to_owned(),
+                6327
+            ),
+            ("materialization_failure".to_owned(), 5),
+        ])
+    );
+}
+
+#[test]
 fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
     let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
 

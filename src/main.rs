@@ -351,6 +351,24 @@ fn main() {
             );
             return;
         }
+        Some("--generated-depth-two-value-unique-signature-left-supply-value-spread-selection") => {
+            let (rows_per_family, candidate_pair_limit) =
+                parse_generated_depth_two_value_unique_signature_left_supply_value_spread_selection_args(
+                    args,
+                );
+            let report =
+                dataset_label::generated_depth_two_value_unique_signature_left_supply_value_spread_bounded_selection_report(
+                    rows_per_family,
+                    candidate_pair_limit,
+                );
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).expect(
+                    "generated depth-two value-unique signature left-supply value-spread selection report must serialize",
+                )
+            );
+            return;
+        }
         Some("--generated-depth-two-signature-bounded-support") => {
             let (rows_per_family, candidate_pair_limit) =
                 parse_generated_depth_two_signature_bounded_support_args(args);
@@ -452,6 +470,7 @@ Commands:\n\
   --generated-depth-two-value-unique-signature-pattern-limit-atlas [--rows-per-family N]\n\
   --generated-depth-two-value-unique-signature-left-supply-atlas [--rows-per-family N]\n\
   --generated-depth-two-value-unique-signature-left-supply-bounded-selection [--rows-per-family N] [--candidate-pair-limit N]\n\
+  --generated-depth-two-value-unique-signature-left-supply-value-spread-selection [--rows-per-family N] [--candidate-pair-limit N]\n\
   --generated-depth-two-signature-bounded-support [--rows-per-family N] [--candidate-pair-limit N]\n\
   --generated-depth-two-profile-inventory\n\
   --generated-depth-two-profile-source-inventory\n\
@@ -579,6 +598,31 @@ fn parse_generated_depth_two_value_unique_signature_left_supply_bounded_selectio
     mut args: impl Iterator<Item = String>,
 ) -> (usize, usize) {
     let command = "--generated-depth-two-value-unique-signature-left-supply-bounded-selection";
+    let mut rows_per_family = dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY;
+    let mut candidate_pair_limit = 2_500usize;
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--rows-per-family" => {
+                rows_per_family =
+                    parse_positive_usize_arg(args.next(), "--rows-per-family", command);
+            }
+            "--candidate-pair-limit" => {
+                candidate_pair_limit =
+                    parse_positive_usize_arg(args.next(), "--candidate-pair-limit", command);
+            }
+            _ => {
+                eprintln!("unsupported argument for {command}: {arg}");
+                std::process::exit(2);
+            }
+        }
+    }
+    (rows_per_family, candidate_pair_limit)
+}
+
+fn parse_generated_depth_two_value_unique_signature_left_supply_value_spread_selection_args(
+    mut args: impl Iterator<Item = String>,
+) -> (usize, usize) {
+    let command = "--generated-depth-two-value-unique-signature-left-supply-value-spread-selection";
     let mut rows_per_family = dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY;
     let mut candidate_pair_limit = 2_500usize;
     while let Some(arg) = args.next() {

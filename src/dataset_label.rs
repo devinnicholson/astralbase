@@ -1941,6 +1941,26 @@ pub fn generated_depth_two_value_unique_signature_left_supply_bounded_selection_
         "unbounded_expanded_plus_outer_left_vs_expanded_right_v0",
         white_patterns,
         black_patterns,
+        GeneratedDepthTwoCandidatePairOrder::ProfileIndexSpread,
+    )
+}
+
+#[must_use]
+pub fn generated_depth_two_value_unique_signature_left_supply_value_spread_bounded_selection_report(
+    rows_per_family_target: usize,
+    candidate_pair_limit_per_family: usize,
+) -> GeneratedDepthTwoSignatureBoundedSupportReport {
+    let seed_rows = non_fixture_composed_domain_seed_rows();
+    let (white_patterns, black_patterns) =
+        generated_left_supply_outer_vs_expanded_right_component_patterns();
+    generated_depth_two_value_unique_signature_bounded_support_report_with_seed_and_patterns(
+        &seed_rows,
+        rows_per_family_target,
+        candidate_pair_limit_per_family,
+        "unbounded_expanded_plus_outer_left_vs_expanded_right_value_spread_v0",
+        white_patterns,
+        black_patterns,
+        GeneratedDepthTwoCandidatePairOrder::ComponentValueDigestSpread,
     )
 }
 
@@ -2765,6 +2785,12 @@ struct GeneratedDepthTwoSignatureProfileSelection {
     family_counts: Vec<usize>,
     rejection_counts: BTreeMap<String, usize>,
     candidates: Vec<GeneratedDepthTwoSelectedSignatureCandidate>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GeneratedDepthTwoCandidatePairOrder {
+    ProfileIndexSpread,
+    ComponentValueDigestSpread,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -4061,15 +4087,18 @@ fn generated_depth_two_value_unique_signature_bounded_support_report_with_seed_a
     source: &str,
     white_patterns: Vec<Vec<(Square, char)>>,
     black_patterns: Vec<Vec<(Square, char)>>,
+    candidate_pair_order: GeneratedDepthTwoCandidatePairOrder,
 ) -> GeneratedDepthTwoSignatureBoundedSupportReport {
-    let selection = generated_depth_two_signature_profile_selection_with_patterns_internal(
-        seed_rows,
-        rows_per_family_target,
-        white_patterns,
-        black_patterns,
-        Some(candidate_pair_limit_per_family),
-        true,
-    );
+    let selection =
+        generated_depth_two_signature_profile_selection_with_patterns_internal_and_order(
+            seed_rows,
+            rows_per_family_target,
+            white_patterns,
+            black_patterns,
+            Some(candidate_pair_limit_per_family),
+            true,
+            candidate_pair_order,
+        );
     let topology_families = generated_depth_two_topology_families();
     let selected_counts_by_topology_family = topology_families
         .iter()
@@ -4429,6 +4458,26 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal(
     candidate_pair_limit_per_family: Option<usize>,
     require_value_digest_uniqueness: bool,
 ) -> GeneratedDepthTwoSignatureProfileSelection {
+    generated_depth_two_signature_profile_selection_with_patterns_internal_and_order(
+        seed_rows,
+        rows_per_family_target,
+        white_patterns,
+        black_patterns,
+        candidate_pair_limit_per_family,
+        require_value_digest_uniqueness,
+        GeneratedDepthTwoCandidatePairOrder::ProfileIndexSpread,
+    )
+}
+
+fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_order(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+    candidate_pair_limit_per_family: Option<usize>,
+    require_value_digest_uniqueness: bool,
+    candidate_pair_order: GeneratedDepthTwoCandidatePairOrder,
+) -> GeneratedDepthTwoSignatureProfileSelection {
     let white_profiles = generated_depth_two_signature_profiles(white_patterns);
     let black_profiles = generated_depth_two_signature_profiles(black_patterns);
     let topology_families = generated_depth_two_topology_families();
@@ -4456,10 +4505,11 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal(
         .iter()
         .enumerate()
         .map(|(family_index, _family)| {
-            generated_depth_two_signature_profile_candidate_pairs(
+            generated_depth_two_signature_profile_candidate_pairs_with_order(
                 family_index,
                 &white_profiles,
                 &black_profiles,
+                candidate_pair_order,
             )
         })
         .collect::<Vec<_>>();
@@ -5171,6 +5221,20 @@ fn generated_depth_two_signature_profile_candidate_pairs(
     white_profiles: &[GeneratedDepthTwoSignatureProfile],
     black_profiles: &[GeneratedDepthTwoSignatureProfile],
 ) -> Vec<(usize, usize, usize)> {
+    generated_depth_two_signature_profile_candidate_pairs_with_order(
+        family_index,
+        white_profiles,
+        black_profiles,
+        GeneratedDepthTwoCandidatePairOrder::ProfileIndexSpread,
+    )
+}
+
+fn generated_depth_two_signature_profile_candidate_pairs_with_order(
+    family_index: usize,
+    white_profiles: &[GeneratedDepthTwoSignatureProfile],
+    black_profiles: &[GeneratedDepthTwoSignatureProfile],
+    candidate_pair_order: GeneratedDepthTwoCandidatePairOrder,
+) -> Vec<(usize, usize, usize)> {
     let mut pairs = Vec::new();
     for (left_index, left) in white_profiles.iter().enumerate() {
         for (right_index, right) in black_profiles.iter().enumerate() {
@@ -5188,15 +5252,59 @@ fn generated_depth_two_signature_profile_candidate_pairs(
         .len()
         .saturating_mul(black_profiles.len())
         .max(1);
-    pairs.sort_by_key(|(left_index, right_index, total_recursive_nodes)| {
-        (
-            (left_index * 37 + right_index * 53 + family_index * 97) % product,
-            *total_recursive_nodes,
-            *left_index,
-            *right_index,
-        )
-    });
+    match candidate_pair_order {
+        GeneratedDepthTwoCandidatePairOrder::ProfileIndexSpread => {
+            pairs.sort_by_key(|(left_index, right_index, total_recursive_nodes)| {
+                (
+                    (left_index * 37 + right_index * 53 + family_index * 97) % product,
+                    *total_recursive_nodes,
+                    *left_index,
+                    *right_index,
+                )
+            });
+        }
+        GeneratedDepthTwoCandidatePairOrder::ComponentValueDigestSpread => {
+            let left_value_ranks = generated_signature_profile_value_digest_ranks(white_profiles);
+            let right_value_ranks = generated_signature_profile_value_digest_ranks(black_profiles);
+            let value_product = left_value_ranks
+                .len()
+                .saturating_mul(right_value_ranks.len())
+                .max(1);
+            pairs.sort_by_key(|(left_index, right_index, total_recursive_nodes)| {
+                let left = &white_profiles[*left_index];
+                let right = &black_profiles[*right_index];
+                let left_value_rank = left_value_ranks
+                    .get(&left.value_digest)
+                    .copied()
+                    .expect("left profile value digest must have a rank");
+                let right_value_rank = right_value_ranks
+                    .get(&right.value_digest)
+                    .copied()
+                    .expect("right profile value digest must have a rank");
+                (
+                    (left_value_rank * 37 + right_value_rank * 53 + family_index * 97)
+                        % value_product,
+                    *total_recursive_nodes,
+                    *left_index,
+                    *right_index,
+                )
+            });
+        }
+    }
     pairs
+}
+
+fn generated_signature_profile_value_digest_ranks(
+    profiles: &[GeneratedDepthTwoSignatureProfile],
+) -> BTreeMap<String, usize> {
+    let mut ranks = BTreeMap::new();
+    for profile in profiles {
+        let next_rank = ranks.len();
+        ranks
+            .entry(profile.value_digest.clone())
+            .or_insert(next_rank);
+    }
+    ranks
 }
 
 fn generated_depth_two_component_signature_key(
