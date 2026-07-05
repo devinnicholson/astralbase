@@ -645,6 +645,33 @@ pub struct NonFixtureCompositionReplayReport {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignatureTargetReplayPreflightReport {
+    pub row_count: usize,
+    pub checked_heuristic_rows: usize,
+    pub skipped_exact_rows: usize,
+    pub skipped_rejected_rows: usize,
+    pub skipped_non_target_rows: usize,
+    pub required_output_field_missing_counts: BTreeMap<String, usize>,
+    pub contract_field_mismatch_counts: BTreeMap<String, usize>,
+    pub replay_failure_count: usize,
+    pub replay_check_pass_counts: BTreeMap<String, usize>,
+    pub replay_check_failure_counts: BTreeMap<String, usize>,
+    pub mismatch_examples: Vec<SignatureTargetReplayMismatch>,
+    pub promotion_blocker_counts: BTreeMap<String, usize>,
+    pub replayability_status: String,
+    pub promotion_gate_passed: bool,
+    pub promotion_blockers: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignatureTargetReplayMismatch {
+    pub row_id: String,
+    pub field: String,
+    pub expected: Option<String>,
+    pub actual: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneratedDepthTwoProfileSearchReport {
     pub rows_per_family_target: usize,
     pub left_profile_count: usize,
@@ -846,6 +873,308 @@ pub fn replay_verify_non_fixture_composed_domain_rows(
         Ok(report)
     } else {
         Err(issues)
+    }
+}
+
+pub fn signature_target_replay_preflight_jsonl(
+    input: &str,
+) -> LabelValidationResult<SignatureTargetReplayPreflightReport> {
+    let rows = parse_and_validate_jsonl(input)?;
+    Ok(signature_target_replay_preflight_rows(&rows))
+}
+
+#[must_use]
+pub fn signature_target_replay_preflight_rows(
+    rows: &[DatasetLabelRow],
+) -> SignatureTargetReplayPreflightReport {
+    let mut report = SignatureTargetReplayPreflightReport {
+        row_count: rows.len(),
+        checked_heuristic_rows: 0,
+        skipped_exact_rows: 0,
+        skipped_rejected_rows: 0,
+        skipped_non_target_rows: 0,
+        required_output_field_missing_counts: BTreeMap::new(),
+        contract_field_mismatch_counts: BTreeMap::new(),
+        replay_failure_count: 0,
+        replay_check_pass_counts: BTreeMap::new(),
+        replay_check_failure_counts: BTreeMap::new(),
+        mismatch_examples: Vec::new(),
+        promotion_blocker_counts: BTreeMap::new(),
+        replayability_status: String::new(),
+        promotion_gate_passed: false,
+        promotion_blockers: signature_target_required_promotion_blockers(),
+    };
+
+    for row in rows {
+        match &row.label {
+            LabelPayload::Heuristic { heuristic }
+                if row.domain == NON_FIXTURE_COMPOSED_BOARD_DOMAIN_ID
+                    && heuristic.method == "signature_profile_target_diagnostic" =>
+            {
+                report.checked_heuristic_rows += 1;
+                signature_target_replay_preflight_row(row, heuristic, &mut report);
+            }
+            LabelPayload::Exact { .. } => {
+                report.skipped_exact_rows += 1;
+            }
+            LabelPayload::Rejected { .. } => {
+                report.skipped_rejected_rows += 1;
+            }
+            _ => {
+                report.skipped_non_target_rows += 1;
+            }
+        }
+    }
+
+    let replay_preflight_passed = report.required_output_field_missing_counts.is_empty()
+        && report.contract_field_mismatch_counts.is_empty()
+        && report.replay_failure_count == 0
+        && report.replay_check_failure_counts.is_empty();
+    report.replayability_status = if replay_preflight_passed {
+        "replay_preflight_passed_promotion_blocked"
+    } else {
+        "replay_preflight_failed_promotion_blocked"
+    }
+    .to_owned();
+    report
+}
+
+fn signature_target_replay_preflight_row(
+    row: &DatasetLabelRow,
+    heuristic: &HeuristicLabel,
+    report: &mut SignatureTargetReplayPreflightReport,
+) {
+    for field in SIGNATURE_TARGET_REQUIRED_OUTPUT_FIELDS {
+        if signature_output(heuristic, field).is_none() {
+            increment_count(&mut report.required_output_field_missing_counts, field);
+        }
+    }
+
+    record_signature_contract_check(
+        report,
+        "target_contract_id",
+        signature_output(heuristic, "target_contract_id").as_deref()
+            == Some(SIGNATURE_TARGET_CONTRACT_ID),
+    );
+    record_signature_contract_check(
+        report,
+        "target_status",
+        signature_output(heuristic, "target_status").as_deref() == Some("diagnostic_only"),
+    );
+    record_signature_contract_check(
+        report,
+        "supervision_eligible",
+        signature_output(heuristic, "supervision_eligible").as_deref() == Some("false"),
+    );
+    record_signature_contract_check(
+        report,
+        "component_signature_rule",
+        signature_output(heuristic, "component_signature_rule").as_deref()
+            == Some(SIGNATURE_TARGET_COMPONENT_RULE),
+    );
+    record_signature_contract_check(
+        report,
+        "composition_spec_source",
+        signature_output(heuristic, "composition_spec_source").as_deref()
+            == Some(SIGNATURE_TARGET_DIAGNOSTIC_SOURCE),
+    );
+
+    let blockers = signature_target_blocker_ids(heuristic);
+    for blocker in &blockers {
+        increment_count(&mut report.promotion_blocker_counts, blocker.as_str());
+    }
+    for required in signature_target_required_promotion_blockers() {
+        record_signature_contract_check(
+            report,
+            format!("promotion_blocker:{required}").as_str(),
+            blockers.iter().any(|blocker| blocker == &required),
+        );
+    }
+
+    if row.position.encoding != PositionEncoding::Fen {
+        report.replay_failure_count += 1;
+        push_signature_replay_mismatch(
+            report,
+            row.row_id.as_str(),
+            "position.encoding",
+            Some("fen".to_owned()),
+            Some(format!("{:?}", row.position.encoding)),
+        );
+        return;
+    }
+    let board = match board_from_fen_board_part(row.position.text.as_str()) {
+        Ok(board) => board,
+        Err(error) => {
+            report.replay_failure_count += 1;
+            push_signature_replay_mismatch(
+                report,
+                row.row_id.as_str(),
+                "position.text",
+                Some(format!("parseable FEN board part: {error}")),
+                Some(row.position.text.clone()),
+            );
+            return;
+        }
+    };
+    let replay = match replay_non_fixture_composed_board(
+        &board,
+        NonFixtureComposedBoardValueRule::DepthTwoLocalMoveGame,
+    ) {
+        Ok(replay) => replay,
+        Err(error) => {
+            report.replay_failure_count += 1;
+            push_signature_replay_mismatch(
+                report,
+                row.row_id.as_str(),
+                "replay_non_fixture_composed_board",
+                Some("successful replay".to_owned()),
+                Some(error),
+            );
+            return;
+        }
+    };
+
+    let active_pieces = non_fixture_composed_board_active_piece_summary_from_board(&board);
+    record_signature_replay_check(
+        report,
+        row.row_id.as_str(),
+        "heuristic.outputs.active_pieces",
+        Some(active_pieces),
+        signature_output(heuristic, "active_pieces"),
+    );
+    record_signature_replay_check(
+        report,
+        row.row_id.as_str(),
+        "heuristic.outputs.current_result_value_digest",
+        Some(replay.result_value_digest.clone()),
+        signature_output(heuristic, "current_result_value_digest"),
+    );
+
+    record_signature_replay_check(
+        report,
+        row.row_id.as_str(),
+        "heuristic.outputs.left_component_value_digest",
+        replay.component_value_digests.first().cloned(),
+        signature_output(heuristic, "left_component_value_digest"),
+    );
+    record_signature_replay_check(
+        report,
+        row.row_id.as_str(),
+        "heuristic.outputs.right_component_value_digest",
+        replay.component_value_digests.get(1).cloned(),
+        signature_output(heuristic, "right_component_value_digest"),
+    );
+    record_signature_replay_check(
+        report,
+        row.row_id.as_str(),
+        "heuristic.outputs.left_component_signature",
+        replay.component_signatures.first().cloned(),
+        signature_output(heuristic, "left_component_signature"),
+    );
+    record_signature_replay_check(
+        report,
+        row.row_id.as_str(),
+        "heuristic.outputs.right_component_signature",
+        replay.component_signatures.get(1).cloned(),
+        signature_output(heuristic, "right_component_signature"),
+    );
+
+    let expected_result_signature = signature_output(heuristic, "component_topology_family")
+        .zip(replay.component_signatures.first().cloned())
+        .zip(replay.component_signatures.get(1).cloned())
+        .map(|((topology, left), right)| {
+            generated_depth_two_result_signature_key(
+                topology.as_str(),
+                left.as_str(),
+                right.as_str(),
+            )
+        });
+    record_signature_replay_check(
+        report,
+        row.row_id.as_str(),
+        "heuristic.outputs.result_signature_key",
+        expected_result_signature,
+        signature_output(heuristic, "result_signature_key"),
+    );
+    record_signature_replay_check(
+        report,
+        row.row_id.as_str(),
+        "heuristic.outputs.total_recursive_nodes",
+        replay
+            .exact_values
+            .get("component_recursive_total_nodes")
+            .cloned(),
+        signature_output(heuristic, "total_recursive_nodes"),
+    );
+}
+
+fn signature_output(heuristic: &HeuristicLabel, field: &str) -> Option<String> {
+    heuristic
+        .outputs
+        .get(field)
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+}
+
+fn signature_target_blocker_ids(heuristic: &HeuristicLabel) -> Vec<String> {
+    signature_output(heuristic, "promotion_blockers")
+        .unwrap_or_default()
+        .split(';')
+        .filter_map(|blocker| {
+            let blocker = blocker.trim();
+            (!blocker.is_empty()).then(|| blocker.to_owned())
+        })
+        .collect()
+}
+
+fn signature_target_required_promotion_blockers() -> Vec<String> {
+    SIGNATURE_TARGET_PROMOTION_BLOCKERS
+        .split(';')
+        .map(str::to_owned)
+        .collect()
+}
+
+fn record_signature_contract_check(
+    report: &mut SignatureTargetReplayPreflightReport,
+    field: &str,
+    passed: bool,
+) {
+    if !passed {
+        increment_count(&mut report.contract_field_mismatch_counts, field);
+    }
+}
+
+fn record_signature_replay_check(
+    report: &mut SignatureTargetReplayPreflightReport,
+    row_id: &str,
+    field: &str,
+    expected: Option<String>,
+    actual: Option<String>,
+) {
+    if expected == actual {
+        increment_count(&mut report.replay_check_pass_counts, field);
+    } else {
+        increment_count(&mut report.replay_check_failure_counts, field);
+        push_signature_replay_mismatch(report, row_id, field, expected, actual);
+    }
+}
+
+fn push_signature_replay_mismatch(
+    report: &mut SignatureTargetReplayPreflightReport,
+    row_id: &str,
+    field: &str,
+    expected: Option<String>,
+    actual: Option<String>,
+) {
+    if report.mismatch_examples.len() < SIGNATURE_TARGET_REPLAY_PREFLIGHT_MISMATCH_EXAMPLE_LIMIT {
+        report
+            .mismatch_examples
+            .push(SignatureTargetReplayMismatch {
+                row_id: row_id.to_owned(),
+                field: field.to_owned(),
+                expected,
+                actual,
+            });
     }
 }
 
@@ -1531,6 +1860,8 @@ struct NonFixtureCompositionReplay {
     decomposition_digest: String,
     composition_digest: String,
     component_values: BTreeMap<String, String>,
+    component_value_digests: Vec<String>,
+    component_signatures: Vec<String>,
     result_value_digest: String,
 }
 
@@ -1568,6 +1899,27 @@ const SIGNATURE_TARGET_CONTRACT_ID: &str = "depth2_material_mobility_signature_t
 const SIGNATURE_TARGET_COMPONENT_RULE: &str =
     "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0";
 const SIGNATURE_TARGET_PROMOTION_BLOCKERS: &str = "versioned_exact_value_rule_missing;replay_compatible_provenance_missing;split_semantics_missing;deterministic_and_model_baselines_missing";
+const SIGNATURE_TARGET_REPLAY_PREFLIGHT_MISMATCH_EXAMPLE_LIMIT: usize = 12;
+const SIGNATURE_TARGET_REQUIRED_OUTPUT_FIELDS: [&str; 18] = [
+    "active_pieces",
+    "component_signature_rule",
+    "component_topology_family",
+    "composition_spec_source",
+    "current_result_value_digest",
+    "left_component_signature",
+    "left_component_value_digest",
+    "left_profile_index",
+    "promotion_blockers",
+    "result_signature_key",
+    "right_component_signature",
+    "right_component_value_digest",
+    "right_profile_index",
+    "row_number",
+    "supervision_eligible",
+    "target_contract_id",
+    "target_status",
+    "total_recursive_nodes",
+];
 const GENERATED_DEPTH_TWO_ROWS_PER_TOPOLOGY_FAMILY: usize = 2;
 const GENERATED_DEPTH_TWO_MAX_COMPONENT_RECURSIVE_NODES: usize = 220;
 const GENERATED_DEPTH_TWO_MAX_RECURSIVE_NODES: usize = 1_000;
@@ -4172,7 +4524,7 @@ fn has_duplicates(values: &[String]) -> bool {
     values.iter().collect::<BTreeSet<_>>().len() != values.len()
 }
 
-fn increment_count(counts: &mut BTreeMap<String, usize>, key: &'static str) {
+fn increment_count(counts: &mut BTreeMap<String, usize>, key: &str) {
     *counts.entry(key.to_owned()).or_default() += 1;
 }
 
@@ -4714,11 +5066,13 @@ fn replay_non_fixture_composed_board(
     let mut component_value_class_summaries = Vec::new();
     let mut component_material_summaries = Vec::new();
     let mut component_local_move_summaries = Vec::new();
+    let mut component_signatures = Vec::new();
     let mut component_recursive_node_summaries = Vec::new();
     let mut total_white_local_moves = 0usize;
     let mut total_black_local_moves = 0usize;
     let mut total_recursive_nodes = 0usize;
     let mut component_cgt_values = Vec::new();
+    let mut component_value_digests = Vec::new();
 
     for component in components {
         let material_value = component_material_balance(board, component.active_mask);
@@ -4745,6 +5099,12 @@ fn replay_non_fixture_composed_board(
         }
         let payload = component_evaluation.value.exact_value_payload();
         component_values.insert(component.root.to_string(), payload.digest.clone());
+        component_value_digests.push(payload.digest.clone());
+        component_signatures.push(generated_depth_two_component_signature_key(
+            &payload.digest,
+            material_value,
+            local_move_counts,
+        ));
         bmcompose_component_values.push(CompositionComponentValue {
             component_root: component.root,
             value_digest: payload.digest.clone(),
@@ -4865,6 +5225,8 @@ fn replay_non_fixture_composed_board(
         decomposition_digest: decomposition_digest_text,
         composition_digest,
         component_values,
+        component_value_digests,
+        component_signatures,
         result_value_digest: result_payload.digest,
     })
 }
@@ -4939,6 +5301,44 @@ fn non_fixture_composed_board_wall_pieces() -> Vec<(Square, char)> {
         (Square::D7, 'P'),
         (Square::D8, 'p'),
     ]
+}
+
+fn non_fixture_composed_board_active_piece_summary_from_board(board: &Board) -> String {
+    let wall_squares = non_fixture_composed_board_wall_pieces()
+        .into_iter()
+        .map(|(square, _piece)| square)
+        .collect::<BTreeSet<_>>();
+    let mut active_pieces = Vec::new();
+    for square in board.occupied() {
+        if wall_squares.contains(&square) {
+            continue;
+        }
+        let Some(piece) = board.piece_at(square) else {
+            continue;
+        };
+        let Some(piece_char) = composition_piece_char(piece) else {
+            continue;
+        };
+        active_pieces.push((square, piece_char));
+    }
+    active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
+    generated_depth_two_active_piece_summary(&active_pieces)
+}
+
+fn composition_piece_char(piece: shakmaty::Piece) -> Option<char> {
+    let role_char = match piece.role {
+        shakmaty::Role::Bishop => 'B',
+        shakmaty::Role::Knight => 'N',
+        shakmaty::Role::Pawn => 'P',
+        shakmaty::Role::Queen => 'Q',
+        shakmaty::Role::Rook => 'R',
+        shakmaty::Role::King => return None,
+    };
+    Some(if piece.color == Color::White {
+        role_char
+    } else {
+        role_char.to_ascii_lowercase()
+    })
 }
 
 fn component_material_balance(board: &Board, active_mask: shakmaty::Bitboard) -> i32 {

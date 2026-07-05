@@ -968,6 +968,65 @@ fn signature_target_diagnostic_shard_is_heuristic_not_exact_supervision() {
 }
 
 #[test]
+fn signature_target_replay_preflight_recomputes_diagnostic_fields() {
+    let jsonl = dataset_label::signature_target_diagnostic_shard_jsonl(1).unwrap();
+    let report = dataset_label::signature_target_replay_preflight_jsonl(&jsonl).unwrap();
+
+    assert_eq!(report.row_count, 3);
+    assert_eq!(report.checked_heuristic_rows, 3);
+    assert_eq!(report.required_output_field_missing_counts.len(), 0);
+    assert_eq!(report.contract_field_mismatch_counts.len(), 0);
+    assert_eq!(report.replay_failure_count, 0);
+    assert_eq!(report.replay_check_failure_counts.len(), 0);
+    assert_eq!(
+        report.replayability_status,
+        "replay_preflight_passed_promotion_blocked"
+    );
+    assert!(!report.promotion_gate_passed);
+    assert_eq!(
+        report
+            .replay_check_pass_counts
+            .get("heuristic.outputs.result_signature_key"),
+        Some(&3)
+    );
+    assert_eq!(
+        report
+            .promotion_blocker_counts
+            .get("versioned_exact_value_rule_missing"),
+        Some(&3)
+    );
+}
+
+#[test]
+fn signature_target_replay_preflight_flags_stale_recomputable_field() {
+    let mut rows = dataset_label::signature_target_diagnostic_shard(1);
+    let LabelPayload::Heuristic { heuristic } = &mut rows[0].label else {
+        panic!("signature diagnostic row must be heuristic");
+    };
+    heuristic.outputs.insert(
+        "current_result_value_digest".to_owned(),
+        "stale-digest".to_owned(),
+    );
+
+    let report = dataset_label::signature_target_replay_preflight_rows(&rows);
+    assert_eq!(
+        report.replayability_status,
+        "replay_preflight_failed_promotion_blocked"
+    );
+    assert_eq!(
+        report
+            .replay_check_failure_counts
+            .get("heuristic.outputs.current_result_value_digest"),
+        Some(&1)
+    );
+    assert!(report.mismatch_examples.iter().any(|example| {
+        example.row_id == rows[0].row_id
+            && example.field == "heuristic.outputs.current_result_value_digest"
+            && example.actual.as_deref() == Some("stale-digest")
+    }));
+}
+
+#[test]
 fn generated_depth_two_duplicate_clusters_expose_signature_collapse() {
     let report = dataset_label::generated_depth_two_duplicate_cluster_report();
 

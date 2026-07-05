@@ -91,6 +91,32 @@ fn main() {
             );
             return;
         }
+        Some("--signature-target-replay-preflight") => {
+            let path = parse_signature_target_replay_preflight_path(args);
+            let input = std::fs::read_to_string(path.as_str()).unwrap_or_else(|error| {
+                eprintln!("could not read {path}: {error}");
+                std::process::exit(2);
+            });
+            match dataset_label::signature_target_replay_preflight_jsonl(input.as_str()) {
+                Ok(report) => {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&report)
+                            .expect("signature target replay preflight report must serialize")
+                    );
+                }
+                Err(issues) => {
+                    for issue in issues {
+                        match issue.line_number {
+                            Some(line_number) => eprintln!("line {line_number}: {}", issue.message),
+                            None => eprintln!("{}", issue.message),
+                        }
+                    }
+                    std::process::exit(1);
+                }
+            }
+            return;
+        }
         Some("--replay-non-fixture-composed-domain-shard") => {
             let path = parse_replay_non_fixture_composed_domain_path(args);
             let input = std::fs::read_to_string(path.as_str()).unwrap_or_else(|error| {
@@ -236,6 +262,7 @@ Commands:\n\
   --expanded-non-fixture-composed-domain-shard [--rows-per-family N]\n\
   --leakage-clean-non-fixture-composed-domain-shard [--rows-per-family N]\n\
   --signature-target-diagnostic-shard [--rows-per-family N]\n\
+  --signature-target-replay-preflight PATH\n\
   --replay-non-fixture-composed-domain-shard PATH\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
   --generated-depth-two-combined-source-profile-search [--rows-per-family N]\n\
@@ -377,6 +404,18 @@ fn parse_replay_non_fixture_composed_domain_path(mut args: impl Iterator<Item = 
     });
     if let Some(extra) = args.next() {
         eprintln!("unsupported argument for --replay-non-fixture-composed-domain-shard: {extra}");
+        std::process::exit(2);
+    }
+    path
+}
+
+fn parse_signature_target_replay_preflight_path(mut args: impl Iterator<Item = String>) -> String {
+    let path = args.next().unwrap_or_else(|| {
+        eprintln!("--signature-target-replay-preflight requires a JSONL path");
+        std::process::exit(2);
+    });
+    if let Some(extra) = args.next() {
+        eprintln!("unsupported argument for --signature-target-replay-preflight: {extra}");
         std::process::exit(2);
     }
     path
