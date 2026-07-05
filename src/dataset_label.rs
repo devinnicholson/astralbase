@@ -722,6 +722,26 @@ pub struct GeneratedDepthTwoSignatureBoundedSupportReport {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
+    pub source: String,
+    pub component_signature_rule: String,
+    pub rows_per_family_target: usize,
+    pub left_signature_profile_count: usize,
+    pub right_signature_profile_count: usize,
+    pub left_unique_component_value_digest_count: usize,
+    pub right_unique_component_value_digest_count: usize,
+    pub shared_component_value_digest_count: usize,
+    pub combined_unique_component_value_digest_count: usize,
+    pub component_value_capacity_upper_bound: usize,
+    pub target_row_count: usize,
+    pub candidate_pair_counts_by_topology_family: BTreeMap<String, usize>,
+    pub distinct_candidate_value_pair_counts_by_topology_family: BTreeMap<String, usize>,
+    pub current_selected_row_count: usize,
+    pub current_selected_counts_by_topology_family: BTreeMap<String, usize>,
+    pub current_rejection_counts: BTreeMap<String, usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneratedDepthTwoSignatureProfileCandidateReport {
     pub row_number: usize,
     pub topology_family: String,
@@ -1286,6 +1306,39 @@ pub fn generated_depth_two_value_unique_signature_profile_search_report(
             }),
     );
     generated_depth_two_value_unique_signature_profile_search_report_with_seed_and_patterns(
+        &seed_rows,
+        rows_per_family_target,
+        "corner_plus_edge_minor_ladder_value_unique_exact_metadata_v0",
+        generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        ),
+        generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        ),
+    )
+}
+
+#[must_use]
+pub fn generated_depth_two_value_unique_signature_upper_bound_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
+    let mut seed_rows = Vec::new();
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS
+            .iter()
+            .map(non_fixture_composed_board_exact_row),
+    );
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                non_fixture_composed_domain_rejected_row(index + 1, candidate)
+            }),
+    );
+    generated_depth_two_value_unique_signature_upper_bound_report_with_patterns(
         &seed_rows,
         rows_per_family_target,
         "corner_plus_edge_minor_ladder_value_unique_exact_metadata_v0",
@@ -3125,6 +3178,101 @@ fn generated_depth_two_value_unique_signature_profile_search_report_with_seed_an
         selected_counts_by_topology_family,
         rejection_counts: selection.rejection_counts,
         candidates,
+    }
+}
+
+fn generated_depth_two_value_unique_signature_upper_bound_report_with_patterns(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    source: &str,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
+    let white_profiles = generated_depth_two_signature_profiles(white_patterns.clone());
+    let black_profiles = generated_depth_two_signature_profiles(black_patterns.clone());
+    let left_value_digests = white_profiles
+        .iter()
+        .map(|profile| profile.value_digest.clone())
+        .collect::<BTreeSet<_>>();
+    let right_value_digests = black_profiles
+        .iter()
+        .map(|profile| profile.value_digest.clone())
+        .collect::<BTreeSet<_>>();
+    let combined_value_digests = left_value_digests
+        .union(&right_value_digests)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let shared_component_value_digest_count = left_value_digests
+        .intersection(&right_value_digests)
+        .count();
+    let target_row_count = rows_per_family_target * generated_depth_two_topology_families().len();
+    let component_value_capacity_upper_bound = [
+        left_value_digests.len(),
+        right_value_digests.len(),
+        combined_value_digests.len() / 2,
+        target_row_count,
+    ]
+    .into_iter()
+    .min()
+    .unwrap_or(0);
+
+    let topology_families = generated_depth_two_topology_families();
+    let mut candidate_pair_counts_by_topology_family = BTreeMap::new();
+    let mut distinct_candidate_value_pair_counts_by_topology_family = BTreeMap::new();
+    for (family_index, topology_family) in topology_families.iter().enumerate() {
+        let candidate_pairs = generated_depth_two_signature_profile_candidate_pairs(
+            family_index,
+            &white_profiles,
+            &black_profiles,
+        );
+        candidate_pair_counts_by_topology_family
+            .insert((*topology_family).to_owned(), candidate_pairs.len());
+
+        let mut value_pairs = BTreeSet::new();
+        for (left_index, right_index, _total_recursive_nodes) in candidate_pairs {
+            let left = &white_profiles[left_index];
+            let right = &black_profiles[right_index];
+            if left.value_digest == right.value_digest {
+                continue;
+            }
+            value_pairs.insert(format!("{}|{}", left.value_digest, right.value_digest));
+        }
+        distinct_candidate_value_pair_counts_by_topology_family
+            .insert((*topology_family).to_owned(), value_pairs.len());
+    }
+
+    let selection = generated_depth_two_value_unique_signature_profile_selection_with_patterns(
+        seed_rows,
+        rows_per_family_target,
+        white_patterns,
+        black_patterns,
+        None,
+    );
+    let current_selected_counts_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| ((*family).to_owned(), selection.family_counts[index]))
+        .collect::<BTreeMap<_, _>>();
+    let current_selected_row_count = selection.candidates.len();
+
+    GeneratedDepthTwoValueUniqueSignatureUpperBoundReport {
+        source: source.to_owned(),
+        component_signature_rule:
+            "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
+        rows_per_family_target,
+        left_signature_profile_count: white_profiles.len(),
+        right_signature_profile_count: black_profiles.len(),
+        left_unique_component_value_digest_count: left_value_digests.len(),
+        right_unique_component_value_digest_count: right_value_digests.len(),
+        shared_component_value_digest_count,
+        combined_unique_component_value_digest_count: combined_value_digests.len(),
+        component_value_capacity_upper_bound,
+        target_row_count,
+        candidate_pair_counts_by_topology_family,
+        distinct_candidate_value_pair_counts_by_topology_family,
+        current_selected_row_count,
+        current_selected_counts_by_topology_family,
+        current_rejection_counts: selection.rejection_counts,
     }
 }
 

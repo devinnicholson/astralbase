@@ -891,6 +891,30 @@ fn value_unique_signature_profile_search_exposes_exact_support_limit() {
 }
 
 #[test]
+fn value_unique_signature_upper_bound_shows_component_value_ceiling() {
+    let report = dataset_label::generated_depth_two_value_unique_signature_upper_bound_report(20);
+
+    assert_eq!(report.left_unique_component_value_digest_count, 15);
+    assert_eq!(report.right_unique_component_value_digest_count, 14);
+    assert_eq!(report.shared_component_value_digest_count, 0);
+    assert_eq!(report.combined_unique_component_value_digest_count, 29);
+    assert_eq!(report.component_value_capacity_upper_bound, 14);
+    assert_eq!(report.target_row_count, 60);
+    assert_eq!(report.current_selected_row_count, 13);
+    assert_eq!(
+        report.distinct_candidate_value_pair_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                210
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 210),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 210),
+        ])
+    );
+}
+
+#[test]
 fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
     let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
 
