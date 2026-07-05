@@ -949,6 +949,94 @@ fn value_unique_signature_source_sweep_identifies_capacity_dead_ends() {
 }
 
 #[test]
+fn value_unique_signature_source_atlas_identifies_mixed_hook_escape() {
+    let report = dataset_label::generated_depth_two_value_unique_signature_source_atlas_report(20);
+
+    assert_eq!(report.rows_per_family_target, 20);
+    assert_eq!(report.sources.len(), 9);
+    assert!(
+        report
+            .sources
+            .iter()
+            .all(|source| !source.current_selection_evaluated)
+    );
+    assert_eq!(
+        report
+            .sources
+            .iter()
+            .map(|source| (
+                source.source.as_str(),
+                source.left_unique_component_value_digest_count,
+                source.right_unique_component_value_digest_count,
+                source.component_value_capacity_upper_bound,
+                source.left_signature_profile_count,
+                source.right_signature_profile_count
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            ("corner_plus_edge_minor_ladder_v0", 15, 14, 14, 90, 92),
+            ("cfile_minor_bridge_v0", 8, 11, 8, 43, 59),
+            (
+                "corner_plus_edge_plus_cfile_minor_bridge_v0",
+                15,
+                14,
+                14,
+                97,
+                93
+            ),
+            ("wide_pawn_shelf_v0", 12, 9, 9, 61, 50),
+            (
+                "corner_plus_edge_plus_wide_pawn_shelf_v0",
+                15,
+                14,
+                14,
+                101,
+                92
+            ),
+            (
+                "corner_plus_edge_plus_cfile_bridge_plus_wide_shelf_v0",
+                15,
+                14,
+                14,
+                101,
+                93
+            ),
+            ("mixed_color_hook_v0", 113, 204, 60, 172, 310),
+            (
+                "corner_plus_edge_plus_mixed_color_hook_v0",
+                115,
+                208,
+                60,
+                210,
+                340
+            ),
+            ("ordered_all_atlas_truncation_probe_v0", 15, 14, 14, 101, 93),
+        ]
+    );
+}
+
+#[test]
+fn mixed_hook_upper_bound_selects_value_unique_rows() {
+    let report =
+        dataset_label::generated_depth_two_value_unique_signature_mixed_hook_upper_bound_report(1);
+
+    assert_eq!(report.source, "corner_plus_edge_plus_mixed_color_hook_v0");
+    assert!(report.current_selection_evaluated);
+    assert_eq!(report.left_unique_component_value_digest_count, 115);
+    assert_eq!(report.right_unique_component_value_digest_count, 208);
+    assert_eq!(report.component_value_capacity_upper_bound, 3);
+    assert_eq!(report.current_selected_row_count, 3);
+    assert_eq!(
+        report.current_selected_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 1),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 1),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 1),
+        ])
+    );
+}
+
+#[test]
 fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
     let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
 
