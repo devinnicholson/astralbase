@@ -1965,6 +1965,22 @@ pub fn generated_depth_two_value_unique_signature_left_supply_value_spread_bound
 }
 
 #[must_use]
+pub fn generated_depth_two_value_unique_signature_left_supply_dynamic_pairing_preflight_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoSignatureProfileSearchReport {
+    let seed_rows = non_fixture_composed_domain_seed_rows();
+    let (white_patterns, black_patterns) =
+        generated_left_supply_outer_vs_expanded_right_component_patterns();
+    generated_depth_two_value_unique_signature_dynamic_pairing_preflight_report_with_patterns(
+        &seed_rows,
+        rows_per_family_target,
+        "unbounded_expanded_plus_outer_left_vs_expanded_right_dynamic_pairing_preflight_v0",
+        white_patterns,
+        black_patterns,
+    )
+}
+
+#[must_use]
 pub fn generated_depth_two_signature_bounded_support_report(
     rows_per_family_target: usize,
     candidate_pair_limit_per_family: usize,
@@ -4157,6 +4173,47 @@ fn generated_depth_two_value_unique_signature_bounded_support_report_with_seed_a
     }
 }
 
+fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_report_with_patterns(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    source: &str,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoSignatureProfileSearchReport {
+    let selection = generated_depth_two_value_unique_signature_dynamic_pairing_preflight_selection(
+        seed_rows,
+        rows_per_family_target,
+        white_patterns,
+        black_patterns,
+    );
+    let topology_families = generated_depth_two_topology_families();
+    let selected_counts_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| ((*family).to_owned(), selection.family_counts[index]))
+        .collect::<BTreeMap<_, _>>();
+    let candidate_pair_counts_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| ((*family).to_owned(), selection.candidate_pair_counts[index]))
+        .collect::<BTreeMap<_, _>>();
+    let candidates = generated_depth_two_signature_candidate_reports(&selection);
+
+    GeneratedDepthTwoSignatureProfileSearchReport {
+        source: source.to_owned(),
+        component_signature_rule:
+            "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
+        rows_per_family_target,
+        left_signature_profile_count: selection.left_signature_profile_count,
+        right_signature_profile_count: selection.right_signature_profile_count,
+        candidate_pair_counts_by_topology_family,
+        selected_row_count: candidates.len(),
+        selected_counts_by_topology_family,
+        rejection_counts: selection.rejection_counts,
+        candidates,
+    }
+}
+
 fn generated_depth_two_signature_candidate_reports(
     selection: &GeneratedDepthTwoSignatureProfileSelection,
 ) -> Vec<GeneratedDepthTwoSignatureProfileCandidateReport> {
@@ -4740,6 +4797,169 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
         right_signature_profile_count: black_profiles.len(),
         candidate_pair_counts,
         candidate_offsets,
+        family_counts,
+        rejection_counts,
+        candidates,
+    }
+}
+
+fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_selection(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoSignatureProfileSelection {
+    let white_profiles = generated_depth_two_signature_profiles(white_patterns);
+    let black_profiles = generated_depth_two_signature_profiles(black_patterns);
+    let topology_families = generated_depth_two_topology_families();
+
+    let mut seen_positions = BTreeSet::new();
+    let mut seen_component_value_digests = BTreeSet::new();
+    let mut seen_result_digests = BTreeSet::new();
+    for row in seed_rows {
+        seen_positions.insert(row.position.text.clone());
+        if let Some(summary) = composition_identity_summary_for_row(row) {
+            seen_result_digests.insert(summary.result_value_digest);
+            seen_component_value_digests.extend(summary.component_value_digests);
+        }
+    }
+
+    let mut seen_component_signatures = BTreeSet::new();
+    let mut seen_result_signature_keys = BTreeSet::new();
+    let candidate_pairs = topology_families
+        .iter()
+        .enumerate()
+        .map(|(family_index, _family)| {
+            generated_depth_two_signature_profile_candidate_pairs(
+                family_index,
+                &white_profiles,
+                &black_profiles,
+            )
+        })
+        .collect::<Vec<_>>();
+    let candidate_pair_counts = candidate_pairs
+        .iter()
+        .map(std::vec::Vec::len)
+        .collect::<Vec<_>>();
+    let mut candidate_visits = vec![0usize; topology_families.len()];
+    let mut family_counts = vec![0usize; topology_families.len()];
+    let mut rejection_counts = BTreeMap::new();
+    let mut candidates = Vec::new();
+    let mut next_row_number = NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS.len() + 1;
+
+    while family_counts
+        .iter()
+        .any(|count| *count < rows_per_family_target)
+    {
+        let mut made_progress = false;
+        for (family_index, topology_family) in topology_families.iter().enumerate() {
+            if family_counts[family_index] == rows_per_family_target {
+                continue;
+            }
+
+            for (left_index, right_index, total_recursive_nodes) in &candidate_pairs[family_index] {
+                candidate_visits[family_index] += 1;
+                let left = &white_profiles[*left_index];
+                let right = &black_profiles[*right_index];
+                if left.component_signature == right.component_signature {
+                    increment_count(&mut rejection_counts, "same_component_signature");
+                    continue;
+                }
+                if left.value_digest == right.value_digest {
+                    increment_count(&mut rejection_counts, "same_component_value_digest");
+                    continue;
+                }
+                if seen_component_signatures.contains(&left.component_signature)
+                    || seen_component_signatures.contains(&right.component_signature)
+                {
+                    increment_count(
+                        &mut rejection_counts,
+                        "component_signature_reuse_before_materialization",
+                    );
+                    continue;
+                }
+                if seen_component_value_digests.contains(&left.value_digest)
+                    || seen_component_value_digests.contains(&right.value_digest)
+                {
+                    increment_count(
+                        &mut rejection_counts,
+                        "component_value_digest_reuse_before_materialization",
+                    );
+                    continue;
+                }
+                let result_signature_key = generated_depth_two_result_signature_key(
+                    topology_family,
+                    &left.component_signature,
+                    &right.component_signature,
+                );
+                if seen_result_signature_keys.contains(&result_signature_key) {
+                    increment_count(
+                        &mut rejection_counts,
+                        "result_signature_reuse_before_materialization",
+                    );
+                    continue;
+                }
+                let current_result_value =
+                    CGTValue::sum_all(&[left.value.clone(), right.value.clone()]);
+                let current_result_value_digest = current_result_value.exact_value_payload().digest;
+                if seen_result_digests.contains(&current_result_value_digest) {
+                    increment_count(
+                        &mut rejection_counts,
+                        "result_value_digest_reuse_before_materialization",
+                    );
+                    continue;
+                }
+
+                let mut active_pieces = left.active_pieces.clone();
+                active_pieces.extend(right.active_pieces.iter().copied());
+                active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
+                let board_position_key = generated_depth_two_board_position_key(&active_pieces);
+                if seen_positions.contains(&board_position_key) {
+                    increment_count(
+                        &mut rejection_counts,
+                        "position_reuse_before_materialization",
+                    );
+                    continue;
+                }
+
+                seen_positions.insert(board_position_key);
+                seen_component_value_digests.insert(left.value_digest.clone());
+                seen_component_value_digests.insert(right.value_digest.clone());
+                seen_result_digests.insert(current_result_value_digest.clone());
+                seen_component_signatures.insert(left.component_signature.clone());
+                seen_component_signatures.insert(right.component_signature.clone());
+                seen_result_signature_keys.insert(result_signature_key.clone());
+                candidates.push(GeneratedDepthTwoSelectedSignatureCandidate {
+                    row_number: next_row_number,
+                    topology_family,
+                    left_profile_index: *left_index,
+                    right_profile_index: *right_index,
+                    total_recursive_nodes: *total_recursive_nodes,
+                    active_pieces,
+                    left_component_value_digest: left.value_digest.clone(),
+                    right_component_value_digest: right.value_digest.clone(),
+                    left_component_signature: left.component_signature.clone(),
+                    right_component_signature: right.component_signature.clone(),
+                    result_signature_key,
+                    current_result_value_digest,
+                });
+                next_row_number += 1;
+                family_counts[family_index] += 1;
+                made_progress = true;
+                break;
+            }
+        }
+
+        if !made_progress {
+            break;
+        }
+    }
+
+    GeneratedDepthTwoSignatureProfileSelection {
+        left_signature_profile_count: white_profiles.len(),
+        right_signature_profile_count: black_profiles.len(),
+        candidate_pair_counts,
+        candidate_offsets: candidate_visits,
         family_counts,
         rejection_counts,
         candidates,
