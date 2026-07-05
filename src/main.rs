@@ -118,12 +118,35 @@ fn main() {
             );
             return;
         }
+        Some("--generated-depth-two-combined-source-profile-search") => {
+            let rows_per_family =
+                parse_generated_depth_two_combined_source_profile_search_rows(args);
+            let report = dataset_label::generated_depth_two_combined_source_profile_search_report(
+                rows_per_family,
+            );
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).expect(
+                    "generated depth-two combined-source profile search report must serialize"
+                )
+            );
+            return;
+        }
         Some("--generated-depth-two-profile-inventory") => {
             let report = dataset_label::generated_depth_two_profile_inventory_report();
             println!(
                 "{}",
                 serde_json::to_string_pretty(&report)
                     .expect("generated depth-two profile inventory report must serialize")
+            );
+            return;
+        }
+        Some("--generated-depth-two-profile-source-inventory") => {
+            let report = dataset_label::generated_depth_two_profile_source_inventory_report();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report)
+                    .expect("generated depth-two profile source inventory report must serialize")
             );
             return;
         }
@@ -171,7 +194,9 @@ Commands:\n\
   --leakage-clean-non-fixture-composed-domain-shard [--rows-per-family N]\n\
   --replay-non-fixture-composed-domain-shard PATH\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
+  --generated-depth-two-combined-source-profile-search [--rows-per-family N]\n\
   --generated-depth-two-profile-inventory\n\
+  --generated-depth-two-profile-source-inventory\n\
   --generated-depth-three-profile-inventory\n\
   --help\n"
     );
@@ -179,6 +204,16 @@ Commands:\n\
 
 fn parse_generated_depth_two_profile_search_rows(mut args: impl Iterator<Item = String>) -> usize {
     parse_rows_per_family_arg(&mut args, "--generated-depth-two-profile-search", 10)
+}
+
+fn parse_generated_depth_two_combined_source_profile_search_rows(
+    mut args: impl Iterator<Item = String>,
+) -> usize {
+    parse_rows_per_family_arg(
+        &mut args,
+        "--generated-depth-two-combined-source-profile-search",
+        10,
+    )
 }
 
 fn parse_expanded_non_fixture_composed_domain_rows(

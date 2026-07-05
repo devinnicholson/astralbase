@@ -656,6 +656,12 @@ pub struct GeneratedDepthTwoProfileSearchReport {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoProfileSourceSearchReport {
+    pub source: String,
+    pub report: GeneratedDepthTwoProfileSearchReport,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneratedDepthTwoProfileCandidateReport {
     pub row_number: usize,
     pub topology_family: String,
@@ -670,6 +676,18 @@ pub struct GeneratedDepthTwoProfileCandidateReport {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeneratedDepthTwoProfileInventoryReport {
+    pub white: GeneratedDepthTwoProfileInventorySideReport,
+    pub black: GeneratedDepthTwoProfileInventorySideReport,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoProfileSourceInventoryReport {
+    pub sources: Vec<GeneratedDepthTwoNamedProfileInventoryReport>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedDepthTwoNamedProfileInventoryReport {
+    pub source: String,
     pub white: GeneratedDepthTwoProfileInventorySideReport,
     pub black: GeneratedDepthTwoProfileInventorySideReport,
 }
@@ -768,10 +786,75 @@ pub fn generated_depth_two_profile_search_report(
 }
 
 #[must_use]
+pub fn generated_depth_two_combined_source_profile_search_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoProfileSourceSearchReport {
+    let mut seed_rows = Vec::new();
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS
+            .iter()
+            .map(non_fixture_composed_board_exact_row),
+    );
+    seed_rows.extend(
+        NON_FIXTURE_COMPOSED_DOMAIN_CANDIDATES
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                non_fixture_composed_domain_rejected_row(index + 1, candidate)
+            }),
+    );
+    GeneratedDepthTwoProfileSourceSearchReport {
+        source: "corner_plus_edge_minor_ladder_v0".to_owned(),
+        report: generated_depth_two_profile_search_report_with_seed_and_patterns(
+            &seed_rows,
+            rows_per_family_target,
+            generated_combined_component_patterns(
+                generated_white_component_patterns(),
+                generated_white_edge_minor_ladder_component_patterns(),
+            ),
+            generated_combined_component_patterns(
+                generated_black_component_patterns(),
+                generated_black_edge_minor_ladder_component_patterns(),
+            ),
+        ),
+    }
+}
+
+#[must_use]
 pub fn generated_depth_two_profile_inventory_report() -> GeneratedDepthTwoProfileInventoryReport {
     GeneratedDepthTwoProfileInventoryReport {
         white: generated_depth_two_profile_inventory_side(generated_white_component_patterns()),
         black: generated_depth_two_profile_inventory_side(generated_black_component_patterns()),
+    }
+}
+
+#[must_use]
+pub fn generated_depth_two_profile_source_inventory_report()
+-> GeneratedDepthTwoProfileSourceInventoryReport {
+    GeneratedDepthTwoProfileSourceInventoryReport {
+        sources: vec![
+            generated_depth_two_named_profile_inventory_report(
+                "corner_baseline_v0",
+                generated_white_component_patterns(),
+                generated_black_component_patterns(),
+            ),
+            generated_depth_two_named_profile_inventory_report(
+                "edge_minor_ladder_v0",
+                generated_white_edge_minor_ladder_component_patterns(),
+                generated_black_edge_minor_ladder_component_patterns(),
+            ),
+            generated_depth_two_named_profile_inventory_report(
+                "corner_plus_edge_minor_ladder_v0",
+                generated_combined_component_patterns(
+                    generated_white_component_patterns(),
+                    generated_white_edge_minor_ladder_component_patterns(),
+                ),
+                generated_combined_component_patterns(
+                    generated_black_component_patterns(),
+                    generated_black_edge_minor_ladder_component_patterns(),
+                ),
+            ),
+        ],
     }
 }
 
@@ -2028,10 +2111,31 @@ fn generated_depth_two_profile_search_report_with_seed(
     seed_rows: &[DatasetLabelRow],
     rows_per_family_target: usize,
 ) -> GeneratedDepthTwoProfileSearchReport {
-    let topology_families = generated_depth_two_topology_families();
     let selection =
         generated_depth_two_leakage_clean_profile_selection(seed_rows, rows_per_family_target);
+    generated_depth_two_profile_search_report_from_selection(rows_per_family_target, selection)
+}
 
+fn generated_depth_two_profile_search_report_with_seed_and_patterns(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoProfileSearchReport {
+    let selection = generated_depth_two_leakage_clean_profile_selection_with_patterns(
+        seed_rows,
+        rows_per_family_target,
+        white_patterns,
+        black_patterns,
+    );
+    generated_depth_two_profile_search_report_from_selection(rows_per_family_target, selection)
+}
+
+fn generated_depth_two_profile_search_report_from_selection(
+    rows_per_family_target: usize,
+    selection: GeneratedDepthTwoProfileSelection,
+) -> GeneratedDepthTwoProfileSearchReport {
+    let topology_families = generated_depth_two_topology_families();
     let selected_counts_by_topology_family = topology_families
         .iter()
         .enumerate()
@@ -2075,10 +2179,22 @@ fn generated_depth_two_leakage_clean_profile_selection(
     seed_rows: &[DatasetLabelRow],
     rows_per_family_target: usize,
 ) -> GeneratedDepthTwoProfileSelection {
-    let white_profiles =
-        generated_depth_two_wall_safe_component_profiles(generated_white_component_patterns());
-    let black_profiles =
-        generated_depth_two_wall_safe_component_profiles(generated_black_component_patterns());
+    generated_depth_two_leakage_clean_profile_selection_with_patterns(
+        seed_rows,
+        rows_per_family_target,
+        generated_white_component_patterns(),
+        generated_black_component_patterns(),
+    )
+}
+
+fn generated_depth_two_leakage_clean_profile_selection_with_patterns(
+    seed_rows: &[DatasetLabelRow],
+    rows_per_family_target: usize,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoProfileSelection {
+    let white_profiles = generated_depth_two_wall_safe_component_profiles(white_patterns);
+    let black_profiles = generated_depth_two_wall_safe_component_profiles(black_patterns);
     let topology_families = generated_depth_two_topology_families();
 
     let mut seen_positions = BTreeSet::new();
@@ -2534,6 +2650,18 @@ fn generated_depth_two_profile_inventory_side(
     }
 }
 
+fn generated_depth_two_named_profile_inventory_report(
+    source: &str,
+    white_patterns: Vec<Vec<(Square, char)>>,
+    black_patterns: Vec<Vec<(Square, char)>>,
+) -> GeneratedDepthTwoNamedProfileInventoryReport {
+    GeneratedDepthTwoNamedProfileInventoryReport {
+        source: source.to_owned(),
+        white: generated_depth_two_profile_inventory_side(white_patterns),
+        black: generated_depth_two_profile_inventory_side(black_patterns),
+    }
+}
+
 fn generated_local_move_profile_inventory_side(
     patterns: Vec<Vec<(Square, char)>>,
     component_depth: u8,
@@ -2921,6 +3049,72 @@ fn generated_black_component_patterns() -> Vec<Vec<(Square, char)>> {
         (Square::F7, &['p', 'n'][..]),
     ]));
     unique_generated_component_patterns(patterns)
+}
+
+fn generated_white_edge_minor_ladder_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::A1, 'N'), (Square::A3, 'P')],
+        vec![(Square::A1, 'B'), (Square::B2, 'P'), (Square::B3, 'P')],
+        vec![(Square::B1, 'N'), (Square::A2, 'P'), (Square::A3, 'P')],
+        vec![
+            (Square::A1, 'R'),
+            (Square::B1, 'B'),
+            (Square::A3, 'P'),
+            (Square::B3, 'P'),
+        ],
+        vec![
+            (Square::A1, 'Q'),
+            (Square::B1, 'N'),
+            (Square::A2, 'P'),
+            (Square::B3, 'P'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::A1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::B1, &['N', 'B', 'R', 'Q'][..]),
+        (Square::A2, &['P', 'N', 'B'][..]),
+        (Square::B2, &['P', 'N', 'B'][..]),
+        (Square::A3, &['P', 'N'][..]),
+        (Square::B3, &['P', 'N'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_black_edge_minor_ladder_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::H8, 'n'), (Square::H6, 'p')],
+        vec![(Square::H8, 'b'), (Square::G7, 'p'), (Square::G6, 'p')],
+        vec![(Square::G8, 'n'), (Square::H7, 'p'), (Square::H6, 'p')],
+        vec![
+            (Square::H8, 'r'),
+            (Square::G8, 'b'),
+            (Square::H6, 'p'),
+            (Square::G6, 'p'),
+        ],
+        vec![
+            (Square::H8, 'q'),
+            (Square::G8, 'n'),
+            (Square::H7, 'p'),
+            (Square::G6, 'p'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::H8, &['n', 'b', 'r', 'q'][..]),
+        (Square::G8, &['n', 'b', 'r', 'q'][..]),
+        (Square::H7, &['p', 'n', 'b'][..]),
+        (Square::G7, &['p', 'n', 'b'][..]),
+        (Square::H6, &['p', 'n'][..]),
+        (Square::G6, &['p', 'n'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_combined_component_patterns(
+    mut first: Vec<Vec<(Square, char)>>,
+    second: Vec<Vec<(Square, char)>>,
+) -> Vec<Vec<(Square, char)>> {
+    first.extend(second);
+    unique_generated_component_patterns(first)
 }
 
 fn unique_generated_component_patterns(

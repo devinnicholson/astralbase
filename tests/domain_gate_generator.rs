@@ -727,6 +727,83 @@ fn generated_depth_two_profile_inventory_reports_profile_collapse() {
 }
 
 #[test]
+fn generated_depth_two_profile_source_inventory_reports_edge_ladder_no_go() {
+    let report = dataset_label::generated_depth_two_profile_source_inventory_report();
+
+    assert_eq!(report.sources.len(), 3);
+    assert_eq!(report.sources[0].source, "corner_baseline_v0");
+    assert_eq!(report.sources[0].white.accepted_profile_count, 14);
+    assert_eq!(report.sources[0].black.accepted_profile_count, 13);
+
+    assert_eq!(report.sources[1].source, "edge_minor_ladder_v0");
+    assert_eq!(report.sources[1].white.pattern_count, 514);
+    assert_eq!(report.sources[1].white.wall_safe_pattern_count, 222);
+    assert_eq!(report.sources[1].white.accepted_profile_count, 14);
+    assert_eq!(
+        report.sources[1].white.rejection_counts,
+        std::collections::BTreeMap::from([
+            ("component_recursive_node_budget".to_owned(), 6),
+            ("duplicate_value_digest".to_owned(), 202),
+            ("wall_safety".to_owned(), 292),
+        ])
+    );
+    assert_eq!(report.sources[1].black.pattern_count, 514);
+    assert_eq!(report.sources[1].black.wall_safe_pattern_count, 325);
+    assert_eq!(report.sources[1].black.accepted_profile_count, 13);
+    assert_eq!(
+        report.sources[1].black.rejection_counts,
+        std::collections::BTreeMap::from([
+            ("component_recursive_node_budget".to_owned(), 20),
+            ("duplicate_value_digest".to_owned(), 292),
+            ("wall_safety".to_owned(), 189),
+        ])
+    );
+
+    assert_eq!(report.sources[2].source, "corner_plus_edge_minor_ladder_v0");
+    assert_eq!(report.sources[2].white.accepted_profile_count, 15);
+    assert_eq!(report.sources[2].black.accepted_profile_count, 14);
+}
+
+#[test]
+fn generated_depth_two_combined_source_profile_search_reports_no_gain() {
+    let report = dataset_label::generated_depth_two_combined_source_profile_search_report(10);
+
+    assert_eq!(report.source, "corner_plus_edge_minor_ladder_v0");
+    assert_eq!(report.report.left_profile_count, 15);
+    assert_eq!(report.report.right_profile_count, 14);
+    assert_eq!(
+        report.report.candidate_pair_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                210
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 210),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 210),
+        ])
+    );
+    assert_eq!(report.report.selected_row_count, 7);
+    assert_eq!(
+        report.report.selected_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 2),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 3),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2),
+        ])
+    );
+    assert_eq!(
+        report.report.rejection_counts,
+        std::collections::BTreeMap::from([
+            (
+                "component_value_digest_reuse_before_materialization".to_owned(),
+                616
+            ),
+            ("materialization_failure".to_owned(), 7),
+        ])
+    );
+}
+
+#[test]
 fn generated_depth_three_profile_inventory_reports_recursive_budget_collapse() {
     let report = dataset_label::generated_depth_three_profile_inventory_report();
 
