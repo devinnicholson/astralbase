@@ -386,6 +386,23 @@ fn main() {
             );
             return;
         }
+        Some(
+            "--generated-depth-two-value-unique-signature-all-left-supply-dynamic-pairing-preflight",
+        ) => {
+            let rows_per_family =
+                parse_generated_depth_two_value_unique_signature_all_left_supply_dynamic_pairing_preflight_rows(args);
+            let report =
+                dataset_label::generated_depth_two_value_unique_signature_all_left_supply_dynamic_pairing_preflight_report(
+                    rows_per_family,
+                );
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&report).expect(
+                    "generated depth-two value-unique signature all-left-supply dynamic pairing preflight report must serialize",
+                )
+            );
+            return;
+        }
         Some("--generated-depth-two-signature-bounded-support") => {
             let (rows_per_family, candidate_pair_limit) =
                 parse_generated_depth_two_signature_bounded_support_args(args);
@@ -489,6 +506,7 @@ Commands:\n\
   --generated-depth-two-value-unique-signature-left-supply-bounded-selection [--rows-per-family N] [--candidate-pair-limit N]\n\
   --generated-depth-two-value-unique-signature-left-supply-value-spread-selection [--rows-per-family N] [--candidate-pair-limit N]\n\
   --generated-depth-two-value-unique-signature-left-supply-dynamic-pairing-preflight [--rows-per-family N]\n\
+  --generated-depth-two-value-unique-signature-all-left-supply-dynamic-pairing-preflight [--rows-per-family N]\n\
   --generated-depth-two-signature-bounded-support [--rows-per-family N] [--candidate-pair-limit N]\n\
   --generated-depth-two-profile-inventory\n\
   --generated-depth-two-profile-source-inventory\n\
@@ -668,6 +686,16 @@ fn parse_generated_depth_two_value_unique_signature_left_supply_dynamic_pairing_
     parse_rows_per_family_arg(
         &mut args,
         "--generated-depth-two-value-unique-signature-left-supply-dynamic-pairing-preflight",
+        dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
+    )
+}
+
+fn parse_generated_depth_two_value_unique_signature_all_left_supply_dynamic_pairing_preflight_rows(
+    mut args: impl Iterator<Item = String>,
+) -> usize {
+    parse_rows_per_family_arg(
+        &mut args,
+        "--generated-depth-two-value-unique-signature-all-left-supply-dynamic-pairing-preflight",
         dataset_label::DEFAULT_SIGNATURE_TARGET_DIAGNOSTIC_ROWS_PER_FAMILY,
     )
 }

@@ -1325,6 +1325,46 @@ fn left_supply_dynamic_pairing_preflight_nearly_reaches_rpf50() {
 }
 
 #[test]
+fn all_left_supply_dynamic_pairing_preflight_extends_rpf50_frontier() {
+    let report =
+        dataset_label::generated_depth_two_value_unique_signature_all_left_supply_dynamic_pairing_preflight_report(50);
+
+    assert_eq!(
+        report.source,
+        "unbounded_all_left_supply_vs_expanded_right_dynamic_pairing_preflight_v0"
+    );
+    assert_eq!(report.rows_per_family_target, 50);
+    assert_eq!(report.left_signature_profile_count, 297);
+    assert_eq!(report.right_signature_profile_count, 371);
+    assert_eq!(report.selected_row_count, 145);
+    assert_eq!(
+        report.selected_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                48
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 49),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 48),
+        ])
+    );
+    assert_eq!(
+        report.rejection_counts,
+        std::collections::BTreeMap::from([
+            (
+                "component_signature_reuse_before_materialization".to_owned(),
+                4_895_818
+            ),
+            (
+                "component_value_digest_reuse_before_materialization".to_owned(),
+                3_971_365
+            ),
+            ("same_component_value_digest".to_owned(), 19_495),
+        ])
+    );
+}
+
+#[test]
 fn generated_depth_two_signature_bounded_support_respects_candidate_limit() {
     let report = dataset_label::generated_depth_two_signature_bounded_support_report(20, 1);
 

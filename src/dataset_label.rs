@@ -1981,6 +1981,22 @@ pub fn generated_depth_two_value_unique_signature_left_supply_dynamic_pairing_pr
 }
 
 #[must_use]
+pub fn generated_depth_two_value_unique_signature_all_left_supply_dynamic_pairing_preflight_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoSignatureProfileSearchReport {
+    let seed_rows = non_fixture_composed_domain_seed_rows();
+    let (white_patterns, black_patterns) =
+        generated_all_left_supply_vs_expanded_right_component_patterns();
+    generated_depth_two_value_unique_signature_dynamic_pairing_preflight_report_with_patterns(
+        &seed_rows,
+        rows_per_family_target,
+        "unbounded_all_left_supply_vs_expanded_right_dynamic_pairing_preflight_v0",
+        white_patterns,
+        black_patterns,
+    )
+}
+
+#[must_use]
 pub fn generated_depth_two_signature_bounded_support_report(
     rows_per_family_target: usize,
     candidate_pair_limit_per_family: usize,
@@ -6492,6 +6508,52 @@ fn generated_left_supply_outer_vs_expanded_right_component_patterns()
     );
 
     (white_patterns, black_patterns)
+}
+
+fn generated_all_left_supply_vs_expanded_right_component_patterns()
+-> (Vec<Vec<(Square, char)>>, Vec<Vec<(Square, char)>>) {
+    let current_white_patterns = generated_combined_component_patterns(
+        generated_combined_component_patterns(
+            generated_white_component_patterns(),
+            generated_white_edge_minor_ladder_component_patterns(),
+        ),
+        generated_white_mixed_color_hook_component_patterns(),
+    );
+    let current_black_patterns = generated_combined_component_patterns(
+        generated_combined_component_patterns(
+            generated_black_component_patterns(),
+            generated_black_edge_minor_ladder_component_patterns(),
+        ),
+        generated_black_mixed_color_hook_component_patterns(),
+    );
+    let expanded_black_patterns = generated_combined_component_patterns(
+        current_black_patterns,
+        generated_black_expanded_mixed_color_hook_component_patterns(),
+    );
+    let interior_white_patterns = generated_white_interior_mixed_color_hook_component_patterns();
+    let near_wall_white_patterns = generated_white_near_wall_mixed_color_hook_component_patterns();
+    let outer_white_patterns = generated_white_outer_mixed_color_hook_component_patterns();
+    let diagonal_white_patterns = generated_white_diagonal_mixed_color_hook_component_patterns();
+    let unbounded_expanded_interior_white_patterns =
+        generated_unbounded_combined_component_patterns(
+            generated_unbounded_combined_component_patterns(
+                current_white_patterns,
+                generated_white_expanded_mixed_color_hook_component_patterns(),
+            ),
+            interior_white_patterns,
+        );
+    let white_patterns = generated_unbounded_combined_component_patterns(
+        generated_unbounded_combined_component_patterns(
+            generated_unbounded_combined_component_patterns(
+                unbounded_expanded_interior_white_patterns,
+                near_wall_white_patterns,
+            ),
+            outer_white_patterns,
+        ),
+        diagonal_white_patterns,
+    );
+
+    (white_patterns, expanded_black_patterns)
 }
 
 fn generated_combined_component_patterns(
