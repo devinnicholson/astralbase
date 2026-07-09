@@ -814,6 +814,7 @@ fn generated_depth_two_signature_profile_search_reaches_target_support() {
     );
     assert_eq!(report.left_signature_profile_count, 90);
     assert_eq!(report.right_signature_profile_count, 92);
+    assert_eq!(report.target_row_count, 30);
     assert_eq!(
         report.candidate_pair_counts_by_topology_family,
         std::collections::BTreeMap::from([
@@ -829,6 +830,7 @@ fn generated_depth_two_signature_profile_search_reaches_target_support() {
         ])
     );
     assert_eq!(report.selected_row_count, 30);
+    assert_eq!(report.selected_gap_count, 0);
     assert_eq!(
         report.selected_counts_by_topology_family,
         std::collections::BTreeMap::from([
@@ -838,6 +840,28 @@ fn generated_depth_two_signature_profile_search_reaches_target_support() {
             ),
             ("dfile_two_component_depth2_local_move_v0".to_owned(), 10),
             ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 10),
+        ])
+    );
+    assert_eq!(
+        report.remaining_gap_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 0),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 0),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 0),
+        ])
+    );
+    assert_eq!(
+        report.reached_target_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                true
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), true),
+            (
+                "dfile_two_component_depth2_pawn_phalanx_v0".to_owned(),
+                true
+            ),
         ])
     );
     assert_eq!(
@@ -1294,9 +1318,11 @@ fn left_supply_dynamic_pairing_preflight_nearly_reaches_rpf50() {
         "unbounded_expanded_plus_outer_left_vs_expanded_right_dynamic_pairing_preflight_v0"
     );
     assert_eq!(report.rows_per_family_target, 50);
+    assert_eq!(report.target_row_count, 150);
     assert_eq!(report.left_signature_profile_count, 279);
     assert_eq!(report.right_signature_profile_count, 371);
     assert_eq!(report.selected_row_count, 137);
+    assert_eq!(report.selected_gap_count, 13);
     assert_eq!(
         report.selected_counts_by_topology_family,
         std::collections::BTreeMap::from([
@@ -1306,6 +1332,14 @@ fn left_supply_dynamic_pairing_preflight_nearly_reaches_rpf50() {
             ),
             ("dfile_two_component_depth2_local_move_v0".to_owned(), 46),
             ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 45),
+        ])
+    );
+    assert_eq!(
+        report.remaining_gap_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 4),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 4),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 5),
         ])
     );
     assert_eq!(
@@ -1322,6 +1356,53 @@ fn left_supply_dynamic_pairing_preflight_nearly_reaches_rpf50() {
             ("same_component_value_digest".to_owned(), 17_334),
         ])
     );
+    assert_eq!(
+        report.rejection_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                std::collections::BTreeMap::from([
+                    (
+                        "component_signature_reuse_before_materialization".to_owned(),
+                        1_376_798
+                    ),
+                    (
+                        "component_value_digest_reuse_before_materialization".to_owned(),
+                        1_171_526
+                    ),
+                    ("same_component_value_digest".to_owned(), 5_764),
+                ]),
+            ),
+            (
+                "dfile_two_component_depth2_local_move_v0".to_owned(),
+                std::collections::BTreeMap::from([
+                    (
+                        "component_signature_reuse_before_materialization".to_owned(),
+                        1_354_078
+                    ),
+                    (
+                        "component_value_digest_reuse_before_materialization".to_owned(),
+                        1_160_743
+                    ),
+                    ("same_component_value_digest".to_owned(), 5_700),
+                ]),
+            ),
+            (
+                "dfile_two_component_depth2_pawn_phalanx_v0".to_owned(),
+                std::collections::BTreeMap::from([
+                    (
+                        "component_signature_reuse_before_materialization".to_owned(),
+                        1_403_833
+                    ),
+                    (
+                        "component_value_digest_reuse_before_materialization".to_owned(),
+                        1_185_128
+                    ),
+                    ("same_component_value_digest".to_owned(), 5_870),
+                ]),
+            ),
+        ])
+    );
 }
 
 #[test]
@@ -1334,9 +1415,11 @@ fn all_left_supply_dynamic_pairing_preflight_extends_rpf50_frontier() {
         "unbounded_all_left_supply_vs_expanded_right_dynamic_pairing_preflight_v0"
     );
     assert_eq!(report.rows_per_family_target, 50);
+    assert_eq!(report.target_row_count, 150);
     assert_eq!(report.left_signature_profile_count, 297);
     assert_eq!(report.right_signature_profile_count, 371);
     assert_eq!(report.selected_row_count, 145);
+    assert_eq!(report.selected_gap_count, 5);
     assert_eq!(
         report.selected_counts_by_topology_family,
         std::collections::BTreeMap::from([
@@ -1346,6 +1429,28 @@ fn all_left_supply_dynamic_pairing_preflight_extends_rpf50_frontier() {
             ),
             ("dfile_two_component_depth2_local_move_v0".to_owned(), 49),
             ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 48),
+        ])
+    );
+    assert_eq!(
+        report.remaining_gap_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 2),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 1),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2),
+        ])
+    );
+    assert_eq!(
+        report.reached_target_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                false
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), false),
+            (
+                "dfile_two_component_depth2_pawn_phalanx_v0".to_owned(),
+                false
+            ),
         ])
     );
     assert_eq!(
@@ -1360,6 +1465,103 @@ fn all_left_supply_dynamic_pairing_preflight_extends_rpf50_frontier() {
                 3_971_365
             ),
             ("same_component_value_digest".to_owned(), 19_495),
+        ])
+    );
+    assert_eq!(
+        report.rejection_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                std::collections::BTreeMap::from([
+                    (
+                        "component_signature_reuse_before_materialization".to_owned(),
+                        1_633_170
+                    ),
+                    (
+                        "component_value_digest_reuse_before_materialization".to_owned(),
+                        1_324_571
+                    ),
+                    ("same_component_value_digest".to_owned(), 6_509),
+                ]),
+            ),
+            (
+                "dfile_two_component_depth2_local_move_v0".to_owned(),
+                std::collections::BTreeMap::from([
+                    (
+                        "component_signature_reuse_before_materialization".to_owned(),
+                        1_605_268
+                    ),
+                    (
+                        "component_value_digest_reuse_before_materialization".to_owned(),
+                        1_311_090
+                    ),
+                    ("same_component_value_digest".to_owned(), 6_406),
+                ]),
+            ),
+            (
+                "dfile_two_component_depth2_pawn_phalanx_v0".to_owned(),
+                std::collections::BTreeMap::from([
+                    (
+                        "component_signature_reuse_before_materialization".to_owned(),
+                        1_657_380
+                    ),
+                    (
+                        "component_value_digest_reuse_before_materialization".to_owned(),
+                        1_335_704
+                    ),
+                    ("same_component_value_digest".to_owned(), 6_580),
+                ]),
+            ),
+        ])
+    );
+}
+
+#[test]
+fn all_left_all_right_dynamic_pairing_preflight_does_not_close_rpf50() {
+    let report =
+        dataset_label::generated_depth_two_value_unique_signature_all_left_all_right_dynamic_pairing_preflight_report(50);
+
+    assert_eq!(
+        report.source,
+        "unbounded_all_left_supply_vs_all_right_supply_dynamic_pairing_preflight_v0"
+    );
+    assert_eq!(report.rows_per_family_target, 50);
+    assert_eq!(report.target_row_count, 150);
+    assert_eq!(report.left_signature_profile_count, 297);
+    assert_eq!(report.right_signature_profile_count, 545);
+    assert_eq!(report.selected_row_count, 145);
+    assert_eq!(report.selected_gap_count, 5);
+    assert_eq!(
+        report.selected_counts_by_topology_family,
+        std::collections::BTreeMap::from([
+            (
+                "dfile_two_component_depth2_asymmetric_fan_v0".to_owned(),
+                48
+            ),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 49),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 48),
+        ])
+    );
+    assert_eq!(
+        report.remaining_gap_by_topology_family,
+        std::collections::BTreeMap::from([
+            ("dfile_two_component_depth2_asymmetric_fan_v0".to_owned(), 2),
+            ("dfile_two_component_depth2_local_move_v0".to_owned(), 1),
+            ("dfile_two_component_depth2_pawn_phalanx_v0".to_owned(), 2),
+        ])
+    );
+    assert_eq!(
+        report.rejection_counts,
+        std::collections::BTreeMap::from([
+            (
+                "component_signature_reuse_before_materialization".to_owned(),
+                5_048_806
+            ),
+            (
+                "component_value_digest_reuse_before_materialization".to_owned(),
+                4_208_448
+            ),
+            ("same_component_value_digest".to_owned(), 20_558),
         ])
     );
 }

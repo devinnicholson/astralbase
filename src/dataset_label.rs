@@ -694,12 +694,22 @@ pub struct GeneratedDepthTwoSignatureProfileSearchReport {
     pub source: String,
     pub component_signature_rule: String,
     pub rows_per_family_target: usize,
+    #[serde(default)]
+    pub target_row_count: usize,
     pub left_signature_profile_count: usize,
     pub right_signature_profile_count: usize,
     pub candidate_pair_counts_by_topology_family: BTreeMap<String, usize>,
     pub selected_row_count: usize,
+    #[serde(default)]
+    pub selected_gap_count: usize,
     pub selected_counts_by_topology_family: BTreeMap<String, usize>,
+    #[serde(default)]
+    pub remaining_gap_by_topology_family: BTreeMap<String, usize>,
+    #[serde(default)]
+    pub reached_target_by_topology_family: BTreeMap<String, bool>,
     pub rejection_counts: BTreeMap<String, usize>,
+    #[serde(default)]
+    pub rejection_counts_by_topology_family: BTreeMap<String, BTreeMap<String, usize>>,
     pub candidates: Vec<GeneratedDepthTwoSignatureProfileCandidateReport>,
 }
 
@@ -1997,6 +2007,22 @@ pub fn generated_depth_two_value_unique_signature_all_left_supply_dynamic_pairin
 }
 
 #[must_use]
+pub fn generated_depth_two_value_unique_signature_all_left_all_right_dynamic_pairing_preflight_report(
+    rows_per_family_target: usize,
+) -> GeneratedDepthTwoSignatureProfileSearchReport {
+    let seed_rows = non_fixture_composed_domain_seed_rows();
+    let (white_patterns, black_patterns) =
+        generated_all_left_supply_vs_all_right_supply_component_patterns();
+    generated_depth_two_value_unique_signature_dynamic_pairing_preflight_report_with_patterns(
+        &seed_rows,
+        rows_per_family_target,
+        "unbounded_all_left_supply_vs_all_right_supply_dynamic_pairing_preflight_v0",
+        white_patterns,
+        black_patterns,
+    )
+}
+
+#[must_use]
 pub fn generated_depth_two_signature_bounded_support_report(
     rows_per_family_target: usize,
     candidate_pair_limit_per_family: usize,
@@ -2816,6 +2842,7 @@ struct GeneratedDepthTwoSignatureProfileSelection {
     candidate_offsets: Vec<usize>,
     family_counts: Vec<usize>,
     rejection_counts: BTreeMap<String, usize>,
+    rejection_counts_by_family: Vec<BTreeMap<String, usize>>,
     candidates: Vec<GeneratedDepthTwoSelectedSignatureCandidate>,
 }
 
@@ -3832,18 +3859,38 @@ fn generated_depth_two_signature_profile_search_report_with_seed_and_patterns(
         .map(|(index, family)| ((*family).to_owned(), selection.candidate_pair_counts[index]))
         .collect::<BTreeMap<_, _>>();
     let candidates = generated_depth_two_signature_candidate_reports(&selection);
+    let rejection_counts_by_topology_family =
+        generated_depth_two_signature_rejection_counts_by_topology_family(
+            &topology_families,
+            &selection.rejection_counts_by_family,
+        );
+    let (
+        target_row_count,
+        selected_gap_count,
+        remaining_gap_by_topology_family,
+        reached_target_by_topology_family,
+    ) = generated_depth_two_signature_report_progress(
+        &topology_families,
+        &selection.family_counts,
+        rows_per_family_target,
+    );
 
     GeneratedDepthTwoSignatureProfileSearchReport {
         source: source.to_owned(),
         component_signature_rule:
             "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
         rows_per_family_target,
+        target_row_count,
         left_signature_profile_count: selection.left_signature_profile_count,
         right_signature_profile_count: selection.right_signature_profile_count,
         candidate_pair_counts_by_topology_family,
         selected_row_count: candidates.len(),
+        selected_gap_count,
         selected_counts_by_topology_family,
+        remaining_gap_by_topology_family,
+        reached_target_by_topology_family,
         rejection_counts: selection.rejection_counts,
+        rejection_counts_by_topology_family,
         candidates,
     }
 }
@@ -3874,18 +3921,38 @@ fn generated_depth_two_value_unique_signature_profile_search_report_with_seed_an
         .map(|(index, family)| ((*family).to_owned(), selection.candidate_pair_counts[index]))
         .collect::<BTreeMap<_, _>>();
     let candidates = generated_depth_two_signature_candidate_reports(&selection);
+    let rejection_counts_by_topology_family =
+        generated_depth_two_signature_rejection_counts_by_topology_family(
+            &topology_families,
+            &selection.rejection_counts_by_family,
+        );
+    let (
+        target_row_count,
+        selected_gap_count,
+        remaining_gap_by_topology_family,
+        reached_target_by_topology_family,
+    ) = generated_depth_two_signature_report_progress(
+        &topology_families,
+        &selection.family_counts,
+        rows_per_family_target,
+    );
 
     GeneratedDepthTwoSignatureProfileSearchReport {
         source: source.to_owned(),
         component_signature_rule:
             "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
         rows_per_family_target,
+        target_row_count,
         left_signature_profile_count: selection.left_signature_profile_count,
         right_signature_profile_count: selection.right_signature_profile_count,
         candidate_pair_counts_by_topology_family,
         selected_row_count: candidates.len(),
+        selected_gap_count,
         selected_counts_by_topology_family,
+        remaining_gap_by_topology_family,
+        reached_target_by_topology_family,
         rejection_counts: selection.rejection_counts,
+        rejection_counts_by_topology_family,
         candidates,
     }
 }
@@ -4214,20 +4281,98 @@ fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_report_w
         .map(|(index, family)| ((*family).to_owned(), selection.candidate_pair_counts[index]))
         .collect::<BTreeMap<_, _>>();
     let candidates = generated_depth_two_signature_candidate_reports(&selection);
+    let rejection_counts_by_topology_family =
+        generated_depth_two_signature_rejection_counts_by_topology_family(
+            &topology_families,
+            &selection.rejection_counts_by_family,
+        );
+    let (
+        target_row_count,
+        selected_gap_count,
+        remaining_gap_by_topology_family,
+        reached_target_by_topology_family,
+    ) = generated_depth_two_signature_report_progress(
+        &topology_families,
+        &selection.family_counts,
+        rows_per_family_target,
+    );
 
     GeneratedDepthTwoSignatureProfileSearchReport {
         source: source.to_owned(),
         component_signature_rule:
             "depth2_value_digest_plus_material_balance_plus_local_move_counts_v0".to_owned(),
         rows_per_family_target,
+        target_row_count,
         left_signature_profile_count: selection.left_signature_profile_count,
         right_signature_profile_count: selection.right_signature_profile_count,
         candidate_pair_counts_by_topology_family,
         selected_row_count: candidates.len(),
+        selected_gap_count,
         selected_counts_by_topology_family,
+        remaining_gap_by_topology_family,
+        reached_target_by_topology_family,
         rejection_counts: selection.rejection_counts,
+        rejection_counts_by_topology_family,
         candidates,
     }
+}
+
+fn generated_depth_two_signature_rejection_counts_by_topology_family(
+    topology_families: &[&str],
+    rejection_counts_by_family: &[BTreeMap<String, usize>],
+) -> BTreeMap<String, BTreeMap<String, usize>> {
+    topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| {
+            (
+                (*family).to_owned(),
+                rejection_counts_by_family[index].clone(),
+            )
+        })
+        .collect()
+}
+
+fn generated_depth_two_signature_report_progress(
+    topology_families: &[&str],
+    family_counts: &[usize],
+    rows_per_family_target: usize,
+) -> (
+    usize,
+    usize,
+    BTreeMap<String, usize>,
+    BTreeMap<String, bool>,
+) {
+    let target_row_count = rows_per_family_target * topology_families.len();
+    let selected_row_count = family_counts.iter().sum::<usize>();
+    let selected_gap_count = target_row_count.saturating_sub(selected_row_count);
+    let remaining_gap_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| {
+            (
+                (*family).to_owned(),
+                rows_per_family_target.saturating_sub(family_counts[index]),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let reached_target_by_topology_family = topology_families
+        .iter()
+        .enumerate()
+        .map(|(index, family)| {
+            (
+                (*family).to_owned(),
+                family_counts[index] >= rows_per_family_target,
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    (
+        target_row_count,
+        selected_gap_count,
+        remaining_gap_by_topology_family,
+        reached_target_by_topology_family,
+    )
 }
 
 fn generated_depth_two_signature_candidate_reports(
@@ -4592,6 +4737,8 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
         .collect::<Vec<_>>();
     let mut family_counts = vec![0usize; topology_families.len()];
     let mut rejection_counts = BTreeMap::new();
+    let mut rejection_counts_by_family =
+        vec![BTreeMap::<String, usize>::new(); topology_families.len()];
     let mut candidates = Vec::new();
     let mut next_row_number = NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS.len() + 1;
 
@@ -4615,18 +4762,30 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                 let left = &white_profiles[left_index];
                 let right = &black_profiles[right_index];
                 if left.component_signature == right.component_signature {
-                    increment_count(&mut rejection_counts, "same_component_signature");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "same_component_signature",
+                    );
                     continue;
                 }
                 if require_value_digest_uniqueness && left.value_digest == right.value_digest {
-                    increment_count(&mut rejection_counts, "same_component_value_digest");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "same_component_value_digest",
+                    );
                     continue;
                 }
                 if seen_component_signatures.contains(&left.component_signature)
                     || seen_component_signatures.contains(&right.component_signature)
                 {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "component_signature_reuse_before_materialization",
                     );
                     continue;
@@ -4635,8 +4794,10 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                     && (seen_component_value_digests.contains(&left.value_digest)
                         || seen_component_value_digests.contains(&right.value_digest))
                 {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "component_value_digest_reuse_before_materialization",
                     );
                     continue;
@@ -4647,8 +4808,10 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                     &right.component_signature,
                 );
                 if seen_result_signature_keys.contains(&result_signature_key) {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "result_signature_reuse_before_materialization",
                     );
                     continue;
@@ -4659,8 +4822,10 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                 if require_value_digest_uniqueness
                     && seen_result_digests.contains(&current_result_value_digest)
                 {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "result_value_digest_reuse_before_materialization",
                     );
                     continue;
@@ -4671,8 +4836,10 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                 active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
                 let board_position_key = generated_depth_two_board_position_key(&active_pieces);
                 if seen_positions.contains(&board_position_key) {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "position_reuse_before_materialization",
                     );
                     continue;
@@ -4693,20 +4860,37 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                     spec_source: PROFILED_DEPTH_TWO_GENERATED_SPEC_SOURCE,
                 };
                 let Ok(row) = try_non_fixture_composed_board_exact_row(&spec) else {
-                    increment_count(&mut rejection_counts, "materialization_failure");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "materialization_failure",
+                    );
                     continue;
                 };
                 if !generated_depth_two_row_within_node_budget(&row) {
-                    increment_count(&mut rejection_counts, "row_recursive_node_budget");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "row_recursive_node_budget",
+                    );
                     continue;
                 }
                 let Some(summary) = composition_identity_summary_for_row(&row) else {
-                    increment_count(&mut rejection_counts, "missing_identity_summary");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "missing_identity_summary",
+                    );
                     continue;
                 };
                 if has_duplicates(&summary.component_identities) {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "intra_row_component_identity_duplicate",
                     );
                     continue;
@@ -4715,19 +4899,39 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                     && (has_duplicates(&summary.component_value_digests)
                         || has_duplicates(&summary.component_value_identities))
                 {
-                    increment_count(&mut rejection_counts, "intra_row_component_value_duplicate");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "intra_row_component_value_duplicate",
+                    );
                     continue;
                 }
                 if seen_positions.contains(&row.position.text) {
-                    increment_count(&mut rejection_counts, "row_position_reuse");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "row_position_reuse",
+                    );
                     continue;
                 }
                 if seen_decomposition_digests.contains(&summary.decomposition_digest) {
-                    increment_count(&mut rejection_counts, "decomposition_digest_reuse");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "decomposition_digest_reuse",
+                    );
                     continue;
                 }
                 if seen_composition_digests.contains(&summary.composition_digest) {
-                    increment_count(&mut rejection_counts, "composition_digest_reuse");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "composition_digest_reuse",
+                    );
                     continue;
                 }
                 if summary
@@ -4735,14 +4939,21 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                     .iter()
                     .any(|identity| seen_component_identities.contains(identity))
                 {
-                    increment_count(&mut rejection_counts, "component_identity_reuse");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "component_identity_reuse",
+                    );
                     continue;
                 }
                 if require_value_digest_uniqueness
                     && seen_result_digests.contains(&summary.result_value_digest)
                 {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "result_value_digest_reuse_after_materialization",
                     );
                     continue;
@@ -4753,8 +4964,10 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                         .iter()
                         .any(|digest| seen_component_value_digests.contains(digest))
                 {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "component_value_digest_reuse_after_materialization",
                     );
                     continue;
@@ -4765,7 +4978,12 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
                         .iter()
                         .any(|identity| seen_component_value_identities.contains(identity))
                 {
-                    increment_count(&mut rejection_counts, "component_value_identity_reuse");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "component_value_identity_reuse",
+                    );
                     continue;
                 }
 
@@ -4815,6 +5033,7 @@ fn generated_depth_two_signature_profile_selection_with_patterns_internal_and_or
         candidate_offsets,
         family_counts,
         rejection_counts,
+        rejection_counts_by_family,
         candidates,
     }
 }
@@ -4860,6 +5079,8 @@ fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_selectio
     let mut candidate_visits = vec![0usize; topology_families.len()];
     let mut family_counts = vec![0usize; topology_families.len()];
     let mut rejection_counts = BTreeMap::new();
+    let mut rejection_counts_by_family =
+        vec![BTreeMap::<String, usize>::new(); topology_families.len()];
     let mut candidates = Vec::new();
     let mut next_row_number = NON_FIXTURE_COMPOSED_BOARD_EXACT_SPECS.len() + 1;
 
@@ -4878,18 +5099,30 @@ fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_selectio
                 let left = &white_profiles[*left_index];
                 let right = &black_profiles[*right_index];
                 if left.component_signature == right.component_signature {
-                    increment_count(&mut rejection_counts, "same_component_signature");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "same_component_signature",
+                    );
                     continue;
                 }
                 if left.value_digest == right.value_digest {
-                    increment_count(&mut rejection_counts, "same_component_value_digest");
+                    increment_rejection_count(
+                        &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
+                        "same_component_value_digest",
+                    );
                     continue;
                 }
                 if seen_component_signatures.contains(&left.component_signature)
                     || seen_component_signatures.contains(&right.component_signature)
                 {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "component_signature_reuse_before_materialization",
                     );
                     continue;
@@ -4897,8 +5130,10 @@ fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_selectio
                 if seen_component_value_digests.contains(&left.value_digest)
                     || seen_component_value_digests.contains(&right.value_digest)
                 {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "component_value_digest_reuse_before_materialization",
                     );
                     continue;
@@ -4909,8 +5144,10 @@ fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_selectio
                     &right.component_signature,
                 );
                 if seen_result_signature_keys.contains(&result_signature_key) {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "result_signature_reuse_before_materialization",
                     );
                     continue;
@@ -4919,8 +5156,10 @@ fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_selectio
                     CGTValue::sum_all(&[left.value.clone(), right.value.clone()]);
                 let current_result_value_digest = current_result_value.exact_value_payload().digest;
                 if seen_result_digests.contains(&current_result_value_digest) {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "result_value_digest_reuse_before_materialization",
                     );
                     continue;
@@ -4931,8 +5170,10 @@ fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_selectio
                 active_pieces.sort_by_key(|(square, piece)| (usize::from(*square), *piece));
                 let board_position_key = generated_depth_two_board_position_key(&active_pieces);
                 if seen_positions.contains(&board_position_key) {
-                    increment_count(
+                    increment_rejection_count(
                         &mut rejection_counts,
+                        &mut rejection_counts_by_family,
+                        family_index,
                         "position_reuse_before_materialization",
                     );
                     continue;
@@ -4978,6 +5219,7 @@ fn generated_depth_two_value_unique_signature_dynamic_pairing_preflight_selectio
         candidate_offsets: candidate_visits,
         family_counts,
         rejection_counts,
+        rejection_counts_by_family,
         candidates,
     }
 }
@@ -6479,6 +6721,102 @@ fn generated_black_interior_mixed_color_hook_component_patterns() -> Vec<Vec<(Sq
     unique_generated_component_patterns(patterns)
 }
 
+fn generated_black_near_wall_mixed_color_hook_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::F8, 'n'), (Square::F7, 'p'), (Square::F6, 'P')],
+        vec![(Square::F8, 'b'), (Square::G7, 'p'), (Square::F6, 'N')],
+        vec![(Square::G8, 'r'), (Square::F7, 'P'), (Square::G6, 'p')],
+        vec![(Square::F8, 'q'), (Square::G7, 'N'), (Square::F6, 'p')],
+        vec![
+            (Square::G8, 'n'),
+            (Square::F7, 'p'),
+            (Square::G6, 'P'),
+            (Square::F5, 'p'),
+        ],
+        vec![
+            (Square::F8, 'r'),
+            (Square::G7, 'p'),
+            (Square::F6, 'N'),
+            (Square::G5, 'p'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::G8, &['n', 'b', 'r'][..]),
+        (Square::F8, &['n', 'b', 'r', 'q'][..]),
+        (Square::G7, &['p', 'n', 'P', 'N'][..]),
+        (Square::F7, &['p', 'n', 'P', 'N'][..]),
+        (Square::G6, &['p', 'n', 'P', 'N'][..]),
+        (Square::F6, &['p', 'n', 'P', 'N'][..]),
+        (Square::G5, &['p', 'n'][..]),
+        (Square::F5, &['p', 'n'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_black_outer_mixed_color_hook_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::H8, 'b'), (Square::H7, 'p'), (Square::H6, 'P')],
+        vec![(Square::G8, 'n'), (Square::H7, 'P'), (Square::G6, 'p')],
+        vec![(Square::H8, 'r'), (Square::G7, 'N'), (Square::H6, 'p')],
+        vec![(Square::G8, 'q'), (Square::H7, 'p'), (Square::F7, 'P')],
+        vec![
+            (Square::H8, 'n'),
+            (Square::G7, 'p'),
+            (Square::H6, 'P'),
+            (Square::F6, 'p'),
+        ],
+        vec![
+            (Square::G8, 'r'),
+            (Square::H7, 'p'),
+            (Square::G6, 'N'),
+            (Square::H5, 'p'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::H8, &['n', 'b', 'r', 'q'][..]),
+        (Square::G8, &['n', 'b', 'r', 'q'][..]),
+        (Square::H7, &['p', 'n', 'P', 'N'][..]),
+        (Square::G7, &['p', 'n', 'P', 'N'][..]),
+        (Square::F7, &['p', 'n', 'P'][..]),
+        (Square::H6, &['p', 'n', 'P'][..]),
+        (Square::G6, &['p', 'n', 'P', 'N'][..]),
+        (Square::F6, &['p', 'n'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
+fn generated_black_diagonal_mixed_color_hook_component_patterns() -> Vec<Vec<(Square, char)>> {
+    let mut patterns = vec![
+        vec![(Square::H8, 'n'), (Square::G7, 'p'), (Square::F6, 'P')],
+        vec![(Square::H8, 'b'), (Square::G7, 'N'), (Square::F6, 'p')],
+        vec![(Square::G8, 'r'), (Square::F7, 'p'), (Square::H6, 'P')],
+        vec![(Square::F8, 'q'), (Square::G7, 'P'), (Square::H6, 'p')],
+        vec![
+            (Square::H8, 'r'),
+            (Square::G7, 'p'),
+            (Square::F6, 'N'),
+            (Square::F5, 'p'),
+        ],
+        vec![
+            (Square::F8, 'n'),
+            (Square::G7, 'p'),
+            (Square::H6, 'P'),
+            (Square::G5, 'n'),
+        ],
+    ];
+    patterns.extend(generated_component_patterns(&[
+        (Square::H8, &['n', 'b', 'r', 'q'][..]),
+        (Square::G8, &['n', 'b', 'r'][..]),
+        (Square::F8, &['n', 'b', 'r', 'q'][..]),
+        (Square::H7, &['p', 'n', 'P'][..]),
+        (Square::G7, &['p', 'n', 'P', 'N'][..]),
+        (Square::F7, &['p', 'n', 'P', 'N'][..]),
+        (Square::H6, &['p', 'n', 'P'][..]),
+        (Square::F6, &['p', 'n', 'P', 'N'][..]),
+    ]));
+    unique_generated_component_patterns(patterns)
+}
+
 fn generated_left_supply_outer_vs_expanded_right_component_patterns()
 -> (Vec<Vec<(Square, char)>>, Vec<Vec<(Square, char)>>) {
     let current_white_patterns = generated_combined_component_patterns(
@@ -6554,6 +6892,32 @@ fn generated_all_left_supply_vs_expanded_right_component_patterns()
     );
 
     (white_patterns, expanded_black_patterns)
+}
+
+fn generated_all_left_supply_vs_all_right_supply_component_patterns()
+-> (Vec<Vec<(Square, char)>>, Vec<Vec<(Square, char)>>) {
+    let (white_patterns, expanded_black_patterns) =
+        generated_all_left_supply_vs_expanded_right_component_patterns();
+    let expanded_interior_black_patterns = generated_unbounded_combined_component_patterns(
+        expanded_black_patterns,
+        generated_black_interior_mixed_color_hook_component_patterns(),
+    );
+    let expanded_interior_near_wall_black_patterns =
+        generated_unbounded_combined_component_patterns(
+            expanded_interior_black_patterns,
+            generated_black_near_wall_mixed_color_hook_component_patterns(),
+        );
+    let expanded_interior_near_wall_outer_black_patterns =
+        generated_unbounded_combined_component_patterns(
+            expanded_interior_near_wall_black_patterns,
+            generated_black_outer_mixed_color_hook_component_patterns(),
+        );
+    let black_patterns = generated_unbounded_combined_component_patterns(
+        expanded_interior_near_wall_outer_black_patterns,
+        generated_black_diagonal_mixed_color_hook_component_patterns(),
+    );
+
+    (white_patterns, black_patterns)
 }
 
 fn generated_combined_component_patterns(
@@ -6721,6 +7085,16 @@ fn has_duplicates(values: &[String]) -> bool {
 
 fn increment_count(counts: &mut BTreeMap<String, usize>, key: &str) {
     *counts.entry(key.to_owned()).or_default() += 1;
+}
+
+fn increment_rejection_count(
+    rejection_counts: &mut BTreeMap<String, usize>,
+    rejection_counts_by_family: &mut [BTreeMap<String, usize>],
+    family_index: usize,
+    key: &str,
+) {
+    increment_count(rejection_counts, key);
+    increment_count(&mut rejection_counts_by_family[family_index], key);
 }
 
 impl SampleLabelCandidate {
