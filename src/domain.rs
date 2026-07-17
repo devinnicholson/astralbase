@@ -1,12 +1,18 @@
+//! The constrained chess-position gate used by Partizan dataset generation.
+
 use bitmesh::{self, DecompositionRejectionReason, DecompositionStatus};
 use shakmaty::{CastlingMode, Chess, EnPassantMode, Position, fen::Fen};
 use std::{fmt, str::FromStr};
 
+/// Stable identifier for the first constrained Partizan chess domain.
 pub const FIRST_CONSTRAINED_DOMAIN_ID: &str = "formal_domain:first_constrained_chess:v0";
+/// Historical documentation anchor for the constrained domain definition.
 pub const FIRST_CONSTRAINED_DOMAIN_DEFINITION: &str =
     "docs/formal_domain.md#first-candidate-domain";
+/// Maximum number of pieces accepted by the first constrained domain.
 pub const FIRST_CONSTRAINED_MAX_PIECES: usize = 8;
 
+/// A parsed chess position that passed every constrained-domain gate.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValidatedDomainPosition {
     fen: String,
@@ -17,53 +23,70 @@ pub struct ValidatedDomainPosition {
 }
 
 impl ValidatedDomainPosition {
+    /// Returns the original FEN supplied to the validator.
     #[must_use]
     pub fn fen(&self) -> &str {
         &self.fen
     }
 
+    /// Returns the validated standard-chess position.
     #[must_use]
     pub fn position(&self) -> &Chess {
         &self.position
     }
 
+    /// Returns a terminal result when the position is checkmate or stalemate.
     #[must_use]
     pub fn terminal_status(&self) -> Option<TerminalStatus> {
         self.terminal_status
     }
 
+    /// Returns the recorded one-ply terminal tactic, when one was found.
     #[must_use]
     pub fn immediate_terminal_tactic(&self) -> Option<&ImmediateTerminalTactic> {
         self.immediate_terminal_tactic.as_ref()
     }
 
+    /// Returns the conservative structural decomposition gate result.
     #[must_use]
     pub fn decomposition(&self) -> &DecompositionGate {
         &self.decomposition
     }
 }
 
+/// The Bitmesh structural result recorded by the domain gate.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DecompositionGate {
+    /// Whether a strict structural partition was certified or rejected.
     pub status: DecompositionGateStatus,
+    /// Number of occupied non-barrier regions in the certificate.
     pub active_component_count: u8,
+    /// Stable serialized Bitmesh certificate digest.
     pub digest: String,
 }
 
+/// Domain-level interpretation of a Bitmesh structural certificate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecompositionGateStatus {
+    /// The supplied board passed the strict structural gate.
     Strict,
+    /// The structural gate rejected the board for the contained reason.
     Rejected(DecompositionGateRejection),
 }
 
+/// Reasons a board did not receive a strict structural certificate.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecompositionGateRejection {
+    /// No locked-pawn barrier was detected.
     NoLockedBarrier,
+    /// The barrier left fewer than two occupied regions.
     LessThanTwoActiveComponents,
+    /// The certificate failed its structural self-validation.
     InvalidCertificate,
 }
 
 impl DecompositionGateRejection {
+    /// Returns the stable machine-readable rejection code.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -74,13 +97,17 @@ impl DecompositionGateRejection {
     }
 }
 
+/// Terminal states recognized without retrograde propagation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TerminalStatus {
+    /// The side to move is checkmated.
     Checkmate,
+    /// The side to move is stalemated.
     Stalemate,
 }
 
 impl TerminalStatus {
+    /// Returns the stable machine-readable terminal-state name.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -90,6 +117,7 @@ impl TerminalStatus {
     }
 }
 
+/// Legal moves whose immediate child is checkmate or stalemate.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImmediateTerminalTactic {
     legal_move_count: usize,
@@ -98,37 +126,44 @@ pub struct ImmediateTerminalTactic {
 }
 
 impl ImmediateTerminalTactic {
+    /// Returns the total legal-move count at the parent position.
     #[must_use]
     pub fn legal_move_count(&self) -> usize {
         self.legal_move_count
     }
 
+    /// Returns the number of immediate checkmating moves.
     #[must_use]
     pub fn checkmating_move_count(&self) -> usize {
         self.checkmating_moves.len()
     }
 
+    /// Returns immediate checkmating moves in normalized UCI notation.
     #[must_use]
     pub fn checkmating_moves(&self) -> &[String] {
         &self.checkmating_moves
     }
 
+    /// Returns the number of immediate stalemating moves.
     #[must_use]
     pub fn stalemating_move_count(&self) -> usize {
         self.stalemating_moves.len()
     }
 
+    /// Returns immediate stalemating moves in normalized UCI notation.
     #[must_use]
     pub fn stalemating_moves(&self) -> &[String] {
         &self.stalemating_moves
     }
 
+    /// Returns the combined checkmating and stalemating child count.
     #[must_use]
     pub fn terminal_child_count(&self) -> usize {
         self.checkmating_move_count() + self.stalemating_move_count()
     }
 }
 
+/// Structured reasons that a FEN failed the constrained-domain gate.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DomainRejectionReport {
     fen: String,
@@ -136,34 +171,42 @@ pub struct DomainRejectionReport {
 }
 
 impl DomainRejectionReport {
+    /// Returns the rejected input FEN.
     #[must_use]
     pub fn fen(&self) -> &str {
         &self.fen
     }
 
+    /// Returns every structured rejection reason.
     #[must_use]
     pub fn reasons(&self) -> &[DomainRejection] {
         &self.reasons
     }
 
+    /// Formats each rejection reason as a human-readable message.
     #[must_use]
     pub fn reason_messages(&self) -> Vec<String> {
         self.reasons.iter().map(ToString::to_string).collect()
     }
 }
 
+/// One constrained-domain rejection with optional diagnostic context.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DomainRejection {
+    /// Stable category for the rejection.
     pub code: DomainRejectionCode,
+    /// Optional implementation diagnostic, such as a parser error.
     pub detail: Option<String>,
 }
 
 impl DomainRejection {
+    /// Creates a rejection without additional diagnostic context.
     #[must_use]
     pub fn new(code: DomainRejectionCode) -> Self {
         Self { code, detail: None }
     }
 
+    /// Creates a rejection with additional diagnostic context.
     #[must_use]
     pub fn with_detail(code: DomainRejectionCode, detail: impl Into<String>) -> Self {
         Self {
@@ -183,18 +226,27 @@ impl fmt::Display for DomainRejection {
     }
 }
 
+/// Stable constrained-domain rejection categories.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DomainRejectionCode {
+    /// The input is not syntactically valid FEN.
     InvalidFen,
+    /// The FEN cannot form a legal standard-chess position.
     InvalidPosition,
+    /// The position retains castling rights, which the domain excludes.
     CastlingRights,
+    /// The position has an en-passant target, which the domain excludes.
     EnPassantTarget,
+    /// The position exceeds [`FIRST_CONSTRAINED_MAX_PIECES`].
     TooManyPieces,
+    /// A non-terminal position lacks an accepted decomposition.
     NoStrictDecomposition,
+    /// A generated structural certificate failed validation.
     CertificateInvalid,
 }
 
 impl DomainRejectionCode {
+    /// Returns the stable machine-readable rejection code.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -208,6 +260,7 @@ impl DomainRejectionCode {
         }
     }
 
+    /// Returns a concise human-readable explanation.
     #[must_use]
     pub const fn message(self) -> &'static str {
         match self {
@@ -234,6 +287,12 @@ impl DomainRejectionCode {
     }
 }
 
+/// Parses and validates a FEN against the first constrained Partizan domain.
+///
+/// The gate accepts legal standard 8×8 positions with at most eight pieces,
+/// no castling rights, and no en-passant target. A non-terminal position must
+/// also have an immediate terminal tactic or a strict Bitmesh structural
+/// certificate. The Bitmesh result is not a proof of full game-tree additivity.
 pub fn validate_first_constrained_fen(
     fen: impl AsRef<str>,
 ) -> Result<ValidatedDomainPosition, DomainRejectionReport> {

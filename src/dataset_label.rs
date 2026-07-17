@@ -1,3 +1,12 @@
+//! Partizan-specific dataset schemas, generators, and replay diagnostics.
+//!
+//! This module is retained behind the default `partizan-dataset` feature for
+//! source compatibility with the Partizan research harness. It is not part of
+//! the small reusable retrograde API. Its many diagnostic report fields remain
+//! an unstable research surface in v0.1.
+
+#![allow(missing_docs)]
+
 use crate::domain::{
     self, FIRST_CONSTRAINED_DOMAIN_DEFINITION, FIRST_CONSTRAINED_DOMAIN_ID,
     ImmediateTerminalTactic, TerminalStatus, ValidatedDomainPosition,
@@ -14,6 +23,12 @@ use std::{
     str::FromStr,
 };
 use thermograph::{CGTValue, ExactValuePayload as ThermographExactValuePayload};
+
+type GeneratedComponentPattern = Vec<(Square, char)>;
+type GeneratedComponentPatternPair = (
+    Vec<GeneratedComponentPattern>,
+    Vec<GeneratedComponentPattern>,
+);
 
 pub const DATASET_LABEL_SCHEMA_VERSION: &str = "partizan.dataset_label.v0";
 pub const FORMAL_CGT_DOMAIN_ID: &str = "formal_domain:thermograph_golden_cgt:v0";
@@ -6818,7 +6833,7 @@ fn generated_black_diagonal_mixed_color_hook_component_patterns() -> Vec<Vec<(Sq
 }
 
 fn generated_left_supply_outer_vs_expanded_right_component_patterns()
--> (Vec<Vec<(Square, char)>>, Vec<Vec<(Square, char)>>) {
+-> GeneratedComponentPatternPair {
     let current_white_patterns = generated_combined_component_patterns(
         generated_combined_component_patterns(
             generated_white_component_patterns(),
@@ -6848,8 +6863,8 @@ fn generated_left_supply_outer_vs_expanded_right_component_patterns()
     (white_patterns, black_patterns)
 }
 
-fn generated_all_left_supply_vs_expanded_right_component_patterns()
--> (Vec<Vec<(Square, char)>>, Vec<Vec<(Square, char)>>) {
+fn generated_all_left_supply_vs_expanded_right_component_patterns() -> GeneratedComponentPatternPair
+{
     let current_white_patterns = generated_combined_component_patterns(
         generated_combined_component_patterns(
             generated_white_component_patterns(),
@@ -6895,7 +6910,7 @@ fn generated_all_left_supply_vs_expanded_right_component_patterns()
 }
 
 fn generated_all_left_supply_vs_all_right_supply_component_patterns()
--> (Vec<Vec<(Square, char)>>, Vec<Vec<(Square, char)>>) {
+-> GeneratedComponentPatternPair {
     let (white_patterns, expanded_black_patterns) =
         generated_all_left_supply_vs_expanded_right_component_patterns();
     let expanded_interior_black_patterns = generated_unbounded_combined_component_patterns(

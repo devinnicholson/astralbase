@@ -1,5 +1,12 @@
+//! Candidate predecessor generation for orthodox chess positions.
+//!
+//! Every emitted parent is checked by replaying legal moves with `shakmaty` in
+//! Astralbase's tests. That is a same-library consistency check, not independent
+//! validation. The release protocol separately requires a python-chess oracle.
+
 use shakmaty::{
-    Board, CastlingMode, Chess, Color, FromSetup, Piece, Position, Rank, Role, Setup, Square,
+    Board, CastlingMode, Chess, Color, EnPassantMode, FromSetup, Piece, Position, Rank, Role,
+    Setup, Square, fen::Fen,
 };
 use std::num::NonZeroU32;
 
@@ -38,8 +45,24 @@ fn is_valid_predecessor(board: &Board, us: Color, them: Color) -> bool {
     true
 }
 
-/// Finds all positions `P'` such that a legal move from `P'` leads to `pos`.
-pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
+fn predecessor_fullmoves(position: &Chess, mover: Color) -> NonZeroU32 {
+    if mover == Color::Black {
+        NonZeroU32::new(position.fullmoves().get().saturating_sub(1).max(1))
+            .expect("the predecessor full-move number is at least one")
+    } else {
+        position.fullmoves()
+    }
+}
+
+/// Appends every candidate parent that can legally reach `position` in one ply.
+///
+/// The output vector is cleared before use. FEN state is reconstructed where
+/// possible, including side to move, castling rights, and en-passant targets.
+/// Repetition history is unavailable from a single [`Chess`] position, so this
+/// function cannot reconstruct history-dependent draw state. Callers should
+/// independently validate emitted parents when using them as research data.
+pub fn inverse_moves(position: &Chess, parents: &mut Vec<Chess>) {
+    let pos = position;
     parents.clear();
 
     let us = pos.turn().other();
@@ -96,12 +119,7 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                                 ep_square: None,
                                 remaining_checks: pos.remaining_checks().copied(),
                                 halfmoves: 0,
-                                fullmoves: if us == Color::Black {
-                                    pos.fullmoves()
-                                } else {
-                                    NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1))
-                                        .unwrap()
-                                },
+                                fullmoves: predecessor_fullmoves(pos, us),
                             },
                             CastlingMode::Standard,
                         )
@@ -155,14 +173,7 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                                         ep_square: None,
                                         remaining_checks: pos.remaining_checks().copied(),
                                         halfmoves: 0,
-                                        fullmoves: if us == Color::Black {
-                                            pos.fullmoves()
-                                        } else {
-                                            NonZeroU32::new(
-                                                pos.fullmoves().get().saturating_sub(1).max(1),
-                                            )
-                                            .unwrap()
-                                        },
+                                        fullmoves: predecessor_fullmoves(pos, us),
                                     },
                                     CastlingMode::Standard,
                                 )
@@ -207,12 +218,7 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                             ep_square: None,
                             remaining_checks: pos.remaining_checks().copied(),
                             halfmoves: pos.halfmoves().saturating_sub(1),
-                            fullmoves: if us == Color::Black {
-                                pos.fullmoves()
-                            } else {
-                                NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1))
-                                    .unwrap()
-                            },
+                            fullmoves: predecessor_fullmoves(pos, us),
                         },
                         CastlingMode::Standard,
                     )
@@ -244,12 +250,7 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                                 ep_square: Some(src),
                                 remaining_checks: pos.remaining_checks().copied(),
                                 halfmoves: pos.halfmoves().saturating_sub(1),
-                                fullmoves: if us == Color::Black {
-                                    pos.fullmoves()
-                                } else {
-                                    NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1))
-                                        .unwrap()
-                                },
+                                fullmoves: predecessor_fullmoves(pos, us),
                             },
                             CastlingMode::Standard,
                         )
@@ -313,14 +314,7 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                                         ep_square: None,
                                         remaining_checks: pos.remaining_checks().copied(),
                                         halfmoves: 0,
-                                        fullmoves: if us == Color::Black {
-                                            pos.fullmoves()
-                                        } else {
-                                            NonZeroU32::new(
-                                                pos.fullmoves().get().saturating_sub(1).max(1),
-                                            )
-                                            .unwrap()
-                                        },
+                                        fullmoves: predecessor_fullmoves(pos, us),
                                     },
                                     CastlingMode::Standard,
                                 )
@@ -372,14 +366,7 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                                         ep_square: Some(sq),
                                         remaining_checks: pos.remaining_checks().copied(),
                                         halfmoves: 0,
-                                        fullmoves: if us == Color::Black {
-                                            pos.fullmoves()
-                                        } else {
-                                            NonZeroU32::new(
-                                                pos.fullmoves().get().saturating_sub(1).max(1),
-                                            )
-                                            .unwrap()
-                                        },
+                                        fullmoves: predecessor_fullmoves(pos, us),
                                     },
                                     CastlingMode::Standard,
                                 )
@@ -424,12 +411,7 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                                 ep_square: None,
                                 remaining_checks: pos.remaining_checks().copied(),
                                 halfmoves: pos.halfmoves().saturating_sub(1),
-                                fullmoves: if us == Color::Black {
-                                    pos.fullmoves()
-                                } else {
-                                    NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1))
-                                        .unwrap()
-                                },
+                                fullmoves: predecessor_fullmoves(pos, us),
                             },
                             CastlingMode::Standard,
                         ) {
@@ -471,14 +453,7 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                                     ep_square: None,
                                     remaining_checks: pos.remaining_checks().copied(),
                                     halfmoves: 0,
-                                    fullmoves: if us == Color::Black {
-                                        pos.fullmoves()
-                                    } else {
-                                        NonZeroU32::new(
-                                            pos.fullmoves().get().saturating_sub(1).max(1),
-                                        )
-                                        .unwrap()
-                                    },
+                                    fullmoves: predecessor_fullmoves(pos, us),
                                 },
                                 CastlingMode::Standard,
                             ) {
@@ -608,11 +583,7 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
                         ep_square: None,
                         remaining_checks: pos.remaining_checks().copied(),
                         halfmoves: pos.halfmoves().saturating_sub(1),
-                        fullmoves: if us == Color::Black {
-                            pos.fullmoves()
-                        } else {
-                            NonZeroU32::new(pos.fullmoves().get().saturating_sub(1).max(1)).unwrap()
-                        },
+                        fullmoves: predecessor_fullmoves(pos, us),
                     },
                     CastlingMode::Standard,
                 ) {
@@ -639,4 +610,19 @@ pub fn inverse_moves(pos: &Chess, parents: &mut Vec<Chess>) {
             );
         }
     }
+
+    // Candidate construction above deliberately over-generates. Keep only
+    // parents whose legal forward transition reproduces all six normalized FEN
+    // fields, including side to move, castling rights, en-passant state, and
+    // move counters. This is an internal same-library consistency screen; the
+    // independent python-chess validation lane remains required for release.
+    let expected = Fen::from_position(pos.clone(), EnPassantMode::Legal);
+    parents.retain(|parent| {
+        parent.legal_moves().iter().any(|mv| {
+            parent
+                .clone()
+                .play(mv)
+                .is_ok_and(|child| Fen::from_position(child, EnPassantMode::Legal) == expected)
+        })
+    });
 }

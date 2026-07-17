@@ -1,6 +1,6 @@
-use astralbase::{GameValue, RetrogradeEngine, dataset_label};
+use astralbase::{GameValue, RetrogradeEngine, artifact, dataset_label};
 use shakmaty::{CastlingMode, Chess, fen::Fen};
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -14,6 +14,37 @@ fn main() {
                 "{}",
                 dataset_label::sample_audited_shard_jsonl()
                     .expect("sample audited shard must serialize")
+            );
+            return;
+        }
+        Some("--sample-label-artifact") => {
+            let output_directory =
+                parse_required_path(args, "--sample-label-artifact", "an output directory");
+            let manifest = artifact::write_sample_dataset_artifact(Path::new(&output_directory))
+                .unwrap_or_else(|error| {
+                    eprintln!("could not write sample artifact: {error}");
+                    std::process::exit(1);
+                });
+            print!(
+                "{}",
+                manifest
+                    .to_json()
+                    .expect("sample artifact manifest must serialize")
+            );
+            return;
+        }
+        Some("--verify-artifact") => {
+            let manifest_path =
+                parse_required_path(args, "--verify-artifact", "a manifest JSON path");
+            let manifest = artifact::verify_artifact_manifest(Path::new(&manifest_path))
+                .unwrap_or_else(|error| {
+                    eprintln!("artifact verification failed: {error}");
+                    std::process::exit(1);
+                });
+            println!(
+                "verified {} file(s) under {}",
+                manifest.files.len(),
+                manifest_path
             );
             return;
         }
@@ -496,6 +527,8 @@ fn print_help() {
 \n\
 Commands:\n\
   --sample-label-shard\n\
+  --sample-label-artifact OUTPUT_DIRECTORY\n\
+  --verify-artifact MANIFEST_JSON\n\
   --frontier-label-shard [--limit N]\n\
   --family-frontier-label-shard [--limit-per-family N]\n\
   --expanded-family-frontier-label-shard [--limit-per-family N]\n\
@@ -532,6 +565,22 @@ Commands:\n\
   --generated-depth-three-profile-inventory\n\
   --help\n"
     );
+}
+
+fn parse_required_path(
+    mut args: impl Iterator<Item = String>,
+    command: &str,
+    description: &str,
+) -> String {
+    let path = args.next().unwrap_or_else(|| {
+        eprintln!("{command} requires {description}");
+        std::process::exit(2);
+    });
+    if let Some(extra) = args.next() {
+        eprintln!("unsupported argument for {command}: {extra}");
+        std::process::exit(2);
+    }
+    path
 }
 
 fn parse_generated_depth_two_profile_search_rows(mut args: impl Iterator<Item = String>) -> usize {

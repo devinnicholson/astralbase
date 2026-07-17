@@ -2,10 +2,38 @@
 name = "astralbase"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+authors = ["Devin Nicholson"]
+description = "Bounded in-memory retrograde exploration for constrained chess research"
+repository = "https://github.com/devinnicholson/astralbase"
+homepage = "https://github.com/devinnicholson/astralbase"
+documentation = "https://docs.rs/astralbase"
+readme = "README.md"
+keywords = ["chess", "retrograde", "tablebase", "cgt", "research"]
+categories = ["algorithms", "game-development", "science"]
+
+[features]
+default = ["partizan-dataset"]
+partizan-dataset = ["dep:bitmesh", "dep:ring", "dep:serde", "dep:serde_json", "dep:thermograph"]
 
 [dependencies]
-bitmesh = { path = "../bitmesh" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-shakmaty = "0.27.2"
-thermograph = { path = "../thermograph" }
+bitmesh = { version = "0.1.0", optional = true }
+ring = { version = "0.17", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+shakmaty = "0.27"
+thermograph = { version = "0.1.0", optional = true }
+
+[[bin]]
+name = "astralbase"
+path = "src/main.rs"
+required-features = ["partizan-dataset"]
+
+[[test]]
+name = "domain_gate_generator"
+path = "tests/domain_gate_generator.rs"
+required-features = ["partizan-dataset"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use Astralbase in research, please cite this software record."
+title: "Astralbase: bounded retrograde exploration for constrained chess research"
+type: software
+authors:
+  - family-names: Nicholson
+    given-names: Devin
+version: 0.1.0
+repository-code: "https://github.com/devinnicholson/astralbase"
+url: "https://github.com/devinnicholson/astralbase"
+keywords:
+  - chess
+  - retrograde analysis
+  - combinatorial game theory
+  - research software
+abstract: >-
+  An experimental Rust library for bounded, in-memory predecessor exploration
+  and Win/Loss propagation from caller-declared orthodox-chess seeds.
