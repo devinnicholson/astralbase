@@ -30,10 +30,12 @@ jobs:
 
     steps:
       - name: Check out Astralbase
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
 
       - name: Check out frozen Bitmesh candidate
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: devinnicholson/bitmesh
           ref: 28aee03bf1acb299fc82d5119f37893264e070e4
@@ -41,7 +43,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out frozen Thermograph candidate
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: devinnicholson/thermograph
           ref: 57df043a5940f4ea3bf29fcb7920f369e035030c
@@ -49,7 +51,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ matrix.rust }}
           components: clippy,rustfmt

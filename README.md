@@ -167,9 +167,12 @@ seed retention, zero-budget behavior, propagation, delaying loss distance,
 and castling transitions.
 
 These candidate-side tests use `shakmaty`, so they do not count as independent
-rules validation. The required frozen python-chess run and archived raw logs
-remain pending. Repetition, fifty-/seventy-five-move handling, draw completeness,
-persistence, and large-scale generation are explicitly outside v0.1.
+rules validation. Suite-level independent validation with python-chess 1.11.2
+passed against this candidate; its structured result has SHA-256
+`0facb6f25c995ab217528de48cb29fb537b5a174b92bdd8ef6d53e82eb04dc0d`.
+The raw evidence is maintained in the Partizan-Fugue suite rather than this
+repository. Repetition, fifty-/seventy-five-move handling, draw completeness,
+persistence, and large-scale generation remain explicitly outside v0.1.
 
 ## Development
 
