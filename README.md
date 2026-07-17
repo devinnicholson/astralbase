@@ -136,10 +136,24 @@ candidates can provide non-committed Cargo patches:
 
 ```console
 cargo \
-  --config 'patch.crates-io.bitmesh.path="../bitmesh"' \
-  --config 'patch.crates-io.thermograph.path="../thermograph"' \
+  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
+  --config 'patch."crates-io".thermograph.path="../thermograph"' \
   test --locked --all-targets --all-features
 ```
+
+Before a longer check, verify that Cargo actually resolves both unpublished
+release candidates through the patches:
+
+```console
+cargo \
+  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
+  --config 'patch."crates-io".thermograph.path="../thermograph"' \
+  check --locked --no-default-features
+```
+
+Quoting `"crates-io"` is required because it is one Cargo configuration-table
+key; the superficially similar `patch.crates-io...` spelling does not select
+the intended registry patch table.
 
 No absolute developer path is stored in `Cargo.toml` or `.cargo/config.toml`.
 The frozen upstream candidate commits for this branch are recorded in

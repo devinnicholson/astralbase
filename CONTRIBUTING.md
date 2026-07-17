@@ -32,19 +32,27 @@ roadmap items.
 While Bitmesh and Thermograph are unpublished, define these shell arguments:
 
 ```text
---config 'patch.crates-io.bitmesh.path="../bitmesh"'
---config 'patch.crates-io.thermograph.path="../thermograph"'
+--config 'patch."crates-io".bitmesh.path="../bitmesh"'
+--config 'patch."crates-io".thermograph.path="../thermograph"'
 ```
 
-Pass both arguments between `cargo` and the subcommand for full-feature checks:
+Keep the quotes around `"crates-io"`; without them Cargo does not address the
+intended registry patch table. Smoke dependency resolution before expensive
+tests with `cargo <PATCHES> check --locked --no-default-features`.
+
+Use both patch arguments for full-feature checks:
 
 ```text
 cargo fmt --check
-cargo <PATCHES> clippy --locked --all-targets --all-features -- -D warnings
+cargo clippy <PATCHES> --locked --all-targets --all-features -- -D warnings
 cargo <PATCHES> test --locked --all-targets --all-features
 cargo <PATCHES> rustdoc --locked --lib --all-features -- -D missing-docs
 cargo <PATCHES> run --locked --no-default-features --example bounded_retrograde
 ```
+
+`cargo-clippy` forwards configuration reliably when `<PATCHES>` follows the
+`clippy` subcommand, as shown above. The other built-in Cargo subcommands accept
+the patch arguments in the global position.
 
 Do not commit absolute path patches or a developer-specific `.cargo/config.toml`.
 

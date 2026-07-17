@@ -54,13 +54,20 @@ jobs:
           toolchain: ${{ matrix.rust }}
           components: clippy,rustfmt
 
-      - name: Check reusable engine on minimum Rust
+      - name: Smoke frozen release-candidate resolution
+        run: >-
+          cargo
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
+          check --locked --no-default-features
+
+      - name: Test reusable engine on minimum Rust
         if: ${{ !matrix.full }}
         run: >-
           cargo
-          --config 'patch.crates-io.bitmesh.path="_upstream/bitmesh"'
-          --config 'patch.crates-io.thermograph.path="_upstream/thermograph"'
-          check --locked --no-default-features
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
+          test --locked --no-default-features --lib
 
       - name: Check formatting
         if: ${{ matrix.full }}
@@ -69,31 +76,31 @@ jobs:
       - name: Lint all targets
         if: ${{ matrix.full }}
         run: >-
-          cargo
-          --config 'patch.crates-io.bitmesh.path="_upstream/bitmesh"'
-          --config 'patch.crates-io.thermograph.path="_upstream/thermograph"'
-          clippy --locked --all-targets --all-features -- -D warnings
+          cargo clippy
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
+          --locked --all-targets --all-features -- -D warnings
 
       - name: Test all targets
         if: ${{ matrix.full }}
         run: >-
           cargo
-          --config 'patch.crates-io.bitmesh.path="_upstream/bitmesh"'
-          --config 'patch.crates-io.thermograph.path="_upstream/thermograph"'
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
           test --locked --all-targets --all-features
 
       - name: Build strict API documentation
         if: ${{ matrix.full }}
         run: >-
           cargo
-          --config 'patch.crates-io.bitmesh.path="_upstream/bitmesh"'
-          --config 'patch.crates-io.thermograph.path="_upstream/thermograph"'
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
           rustdoc --locked --lib --all-features -- -D missing-docs
 
       - name: Run five-minute reusable example
         if: ${{ matrix.full }}
         run: >-
           cargo
-          --config 'patch.crates-io.bitmesh.path="_upstream/bitmesh"'
-          --config 'patch.crates-io.thermograph.path="_upstream/thermograph"'
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
           run --locked --no-default-features --example bounded_retrograde
