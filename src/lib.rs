@@ -15,6 +15,9 @@ pub mod artifact;
 pub mod dataset_label;
 #[cfg(feature = "partizan-dataset")]
 #[cfg_attr(docsrs, doc(cfg(feature = "partizan-dataset")))]
+pub mod discovery;
+#[cfg(feature = "partizan-dataset")]
+#[cfg_attr(docsrs, doc(cfg(feature = "partizan-dataset")))]
 pub mod domain;
 pub mod engine;
 pub mod retrograde;

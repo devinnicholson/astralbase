@@ -1,4 +1,4 @@
-use astralbase::{GameValue, RetrogradeEngine, artifact, dataset_label};
+use astralbase::{GameValue, RetrogradeEngine, artifact, dataset_label, discovery};
 use shakmaty::{CastlingMode, Chess, fen::Fen};
 use std::{path::Path, str::FromStr};
 
@@ -190,6 +190,19 @@ fn main() {
                     std::process::exit(1);
                 }
             }
+            return;
+        }
+        Some("--verify-target-candidates") => {
+            let path = parse_required_path(
+                args,
+                "--verify-target-candidates",
+                "a target-candidate JSONL path",
+            );
+            let input = std::fs::read_to_string(path.as_str()).unwrap_or_else(|error| {
+                eprintln!("could not read {path}: {error}");
+                std::process::exit(2);
+            });
+            print!("{}", discovery::verify_target_candidates_jsonl(&input));
             return;
         }
         Some("--generated-depth-two-profile-search") => {
@@ -541,6 +554,7 @@ Commands:\n\
   --signature-target-mixed-hook-exact-shard [--rows-per-family N]\n\
   --signature-target-replay-preflight PATH\n\
   --replay-non-fixture-composed-domain-shard PATH\n\
+  --verify-target-candidates PATH\n\
   --generated-depth-two-profile-search [--rows-per-family N]\n\
   --generated-depth-two-combined-source-profile-search [--rows-per-family N]\n\
   --generated-depth-two-signature-profile-search [--rows-per-family N]\n\
