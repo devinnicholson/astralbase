@@ -5,6 +5,7 @@ edition = "2024"
 rust-version = "1.85"
 authors = ["Devin Nicholson"]
 description = "Bounded in-memory retrograde exploration for constrained chess research"
+license = "GPL-3.0-or-later"
 repository = "https://github.com/devinnicholson/astralbase"
 homepage = "https://github.com/devinnicholson/astralbase"
 documentation = "https://docs.rs/astralbase"

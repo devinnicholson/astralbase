@@ -27,6 +27,8 @@ All notable changes to Astralbase are recorded here. The project follows
 - Narrowed public claims to bounded, in-memory retrograde exploration; draw
   completeness, persistence, exhaustive tablebases, and CGT values are
   explicit non-claims.
+- Licensed the crate GPL-3.0-or-later, matching its direct Shakmaty (GPL-3.0)
+  dependency.
 
 ### Release-candidate inputs
 

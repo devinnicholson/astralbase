@@ -12,8 +12,9 @@ Astralbase v0.1 is not a complete chess tablebase, a draw solver, or a CGT
 canonical-form engine. It has no persistent tablebase format or completeness
 certificate.
 
-The package has not been published yet. The repository owner's license decision
-is also pending; public source visibility alone does not grant reuse rights.
+The package has not been published yet. It is licensed
+[GPL-3.0-or-later](LICENSE), matching its direct dependency on
+[Shakmaty](https://github.com/niklasf/shakmaty) (GPL-3.0).
 
 ## Five-minute reusable example
 

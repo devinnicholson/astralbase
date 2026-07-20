@@ -11,8 +11,8 @@ roadmap items.
 2. Add a small deterministic fixture before changing an algorithm.
 3. Identify expected-result provenance. Candidate output cannot validate itself.
 4. Update the README and changelog when semantics, scope, or limitations change.
-5. Do not add a license header until the repository owner records the license
-   decision for the complete code history.
+5. Astralbase is licensed [GPL-3.0-or-later](LICENSE). Contribution review
+   still waits on separate contributor terms (e.g. a CLA/DCO).
 
 ## Validation rules
 
