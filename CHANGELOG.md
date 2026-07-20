@@ -29,6 +29,9 @@ All notable changes to Astralbase are recorded here. The project follows
   explicit non-claims.
 - Licensed the crate GPL-3.0-or-later, matching its direct Shakmaty (GPL-3.0)
   dependency.
+- Raised the minimum supported Rust version to 1.88: the crate already used
+  let-chains (stabilized in 1.88), so the declared 1.85 floor did not actually
+  compile and CI's own MSRV job was failing.
 
 ### Release-candidate inputs
 

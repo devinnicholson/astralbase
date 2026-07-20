@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            rust: "1.85"
+            rust: "1.88"
             full: false
           - os: ubuntu-latest
             rust: stable
