@@ -177,7 +177,7 @@ persistence, and large-scale generation remain explicitly outside v0.1.
 
 ## Development
 
-Rust 1.85 or newer is supported. The release checks are:
+Rust 1.88 or newer is supported. The release checks are:
 
 ```text
 cargo fmt --check
