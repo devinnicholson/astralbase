@@ -46,7 +46,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: devinnicholson/thermograph
-          ref: c0f1aae399ff66b0d42681e9735aa1ff889d0816
+          ref: 381e88dad1a1259a4ccc1a015537f8a8acaf7474
           path: _upstream/thermograph
           persist-credentials: false
 
