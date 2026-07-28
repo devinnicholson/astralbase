@@ -1,8 +1,8 @@
 //! Candidate predecessor generation for orthodox chess positions.
 //!
 //! Every emitted parent is checked by replaying legal moves with `shakmaty` in
-//! Astralbase's tests. That is a same-library consistency check, not independent
-//! validation. The release protocol separately requires a python-chess oracle.
+//! Astralbase's tests. This establishes same-library consistency. The release
+//! protocol separately requires a python-chess oracle.
 
 use shakmaty::{
     Board, CastlingMode, Chess, Color, EnPassantMode, FromSetup, Piece, Position, Rank, Role,

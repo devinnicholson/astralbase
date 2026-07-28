@@ -16,6 +16,8 @@ All notable changes to Astralbase are recorded here. The project follows
 - Deterministic sample artifacts with versioned JSON manifests and SHA-256
   payload checksums.
 - CI, citation metadata, contribution guidance, and strict reusable-API docs.
+- Manifest validation for non-empty generator metadata and payload coverage.
+- Golden v0.1 sample-artifact byte lengths and SHA-256 fixtures.
 
 ### Changed
 
@@ -26,22 +28,25 @@ All notable changes to Astralbase are recorded here. The project follows
 - Replaced mandatory sibling dependencies with versioned `0.1.0` specifications.
 - Narrowed public claims to bounded, in-memory retrograde exploration; draw
   completeness, persistence, exhaustive tablebases, and CGT values are
-  explicit non-claims.
+  outside the supported contract.
 - Licensed the crate GPL-3.0-or-later, matching its direct Shakmaty (GPL-3.0)
   dependency.
-- Raised the minimum supported Rust version to 1.88: the crate already used
-  let-chains (stabilized in 1.88), so the declared 1.85 floor did not actually
-  compile and CI's own MSRV job was failing.
+- Set the minimum supported Rust version to 1.88, matching the crate's let-chain
+  usage and CI floor.
 
 ### Release-candidate inputs
 
-- Bitmesh `28aee03bf1acb299fc82d5119f37893264e070e4`
-- Thermograph `57df043a5940f4ea3bf29fcb7920f369e035030c`
+- Bitmesh `b7c7858df2365d8ea4bd2f50ff2afbd51a6f8225`
+- Thermograph `c0f1aae399ff66b0d42681e9735aa1ff889d0816`
 - Partizan validation corpus `starter-corpus-v0.1.json`
 
-The two upstream crates are not yet published. Clean standalone full-feature
-installation remains blocked until their `0.1.0` releases exist in the chosen
-registry; command-line Cargo patches are used only for candidate testing.
+The reviewed upstream commits and CI pins are frozen above. Release sign-off
+still requires registry resolution, the complete patched test gate on remote
+CI, and refreshed independent-oracle evidence against these revisions.
+
+The two upstream crates are awaiting publication. Clean standalone resolution
+remains blocked until their `0.1.0` releases exist in the chosen registry;
+command-line Cargo patches are used only for candidate testing.
 
 ## Pre-readiness baseline - 2026-07-08
 

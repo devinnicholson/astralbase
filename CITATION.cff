@@ -13,7 +13,9 @@ keywords:
   - chess
   - retrograde analysis
   - combinatorial game theory
+  - dataset provenance
   - research software
 abstract: >-
   An experimental Rust library for bounded, in-memory predecessor exploration
-  and Win/Loss propagation from caller-declared orthodox-chess seeds.
+  and Win/Loss propagation from caller-declared orthodox-chess seeds, with an
+  optional versioned dataset-generation and replay surface.

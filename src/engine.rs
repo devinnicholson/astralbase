@@ -10,8 +10,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// caller-declared terminal seed. `Loss` distances maximize over every proved
 /// winning child. A `Win` distance follows the first loss child that proves the
 /// parent, so v0.1 does not claim a globally minimal distance-to-mate value.
-/// This type intentionally has no draw variant: Astralbase v0.1 does not prove
-/// or propagate chess draws.
+/// Draw propagation lies outside Astralbase v0.1, so this type has no draw
+/// variant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum GameValue {
     /// A discovered move reaches a proved loss along a path of this many plies.
@@ -20,8 +20,8 @@ pub enum GameValue {
     Loss(u32),
     /// The position is stored, but no win/loss proof has been established.
     ///
-    /// `Unknown` is epistemic. It is not a draw, stalemate, dead position, or
-    /// proof that no forced result exists.
+    /// `Unknown` is epistemic. Draws, stalemate, dead positions, and claims
+    /// about forced results require separate rules evidence.
     Unknown,
 }
 
@@ -35,7 +35,7 @@ pub enum ProbeResult {
     Present(GameValue),
     /// The position has no row in this engine's in-memory table.
     ///
-    /// Absence is not a draw and does not imply [`GameValue::Unknown`].
+    /// Absence records only that this engine has no stored row.
     Absent,
 }
 
@@ -44,8 +44,8 @@ pub enum ProbeResult {
 /// The engine begins only from caller-supplied seeds. It generates legal
 /// predecessor candidates, propagates `Win` from any `Loss` child, and
 /// propagates `Loss` only after all legal children have been proved `Win`.
-/// It is not a complete tablebase: it has no persistence, draw/repetition
-/// model, exhaustive position enumerator, or completeness certificate.
+/// Persistence, draw/repetition state, exhaustive enumeration, and
+/// completeness certificates lie outside this engine.
 pub struct RetrogradeEngine {
     /// Stored positions and their current bounded-retrograde values.
     ///
@@ -82,9 +82,8 @@ impl RetrogradeEngine {
 
     /// Inserts a caller-declared seed and schedules it for propagation.
     ///
-    /// Astralbase does not independently verify that the position is terminal
-    /// or that `value` matches orthodox chess rules. Release validation must
-    /// establish those facts with a rules oracle.
+    /// The caller supplies terminality and `value`. Release validation must
+    /// establish both with a rules oracle.
     pub fn add_seed(&mut self, position: Chess, value: GameValue) {
         self.tablebase.insert(position.clone(), value);
         self.queue.push_back(position);

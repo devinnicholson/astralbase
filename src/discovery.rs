@@ -6,10 +6,10 @@
 //! depth-two local-move rule, and compares the resulting Thermograph
 //! domain-separated SHA-256 digest with a requested target.
 //!
-//! A match is structural tree identity under that bounded rule. It is not a
-//! claim of equality between arbitrary combinatorial games, and it is not an
-//! orthodox-chess game-tree solution: side to move, check, castling, and
-//! en-passant metadata are outside this board-level contract.
+//! A match is structural tree identity under that bounded rule. Equality
+//! between arbitrary combinatorial games and orthodox-chess game-tree
+//! solutions lie outside this board-level contract; so do side to move, check,
+//! castling, and en-passant metadata.
 
 use bitmesh::{
     self, CompositionCertificate as BitmeshCompositionCertificate, CompositionComponentValue,
@@ -110,7 +110,7 @@ pub struct TargetCandidateResponse {
 pub struct VerifiedStructuralIdentity {
     /// Identity algorithm used for the comparison.
     pub identity_kind: &'static str,
-    /// Reminder that this is structural identity, not arbitrary CGT equality.
+    /// Stable description of the bounded structural-identity semantics.
     pub semantics: &'static str,
     /// Stable Thermograph value-class label.
     pub value_class: String,

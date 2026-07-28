@@ -34,19 +34,19 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check out frozen Bitmesh candidate
+      - name: Check out reviewed Bitmesh 0.1.0 candidate
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: devinnicholson/bitmesh
-          ref: 28aee03bf1acb299fc82d5119f37893264e070e4
+          ref: b7c7858df2365d8ea4bd2f50ff2afbd51a6f8225
           path: _upstream/bitmesh
           persist-credentials: false
 
-      - name: Check out frozen Thermograph candidate
+      - name: Check out reviewed Thermograph 0.1.0 candidate
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: devinnicholson/thermograph
-          ref: 57df043a5940f4ea3bf29fcb7920f369e035030c
+          ref: c0f1aae399ff66b0d42681e9735aa1ff889d0816
           path: _upstream/thermograph
           persist-credentials: false
 
@@ -56,7 +56,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
           components: clippy,rustfmt
 
-      - name: Smoke frozen release-candidate resolution
+      - name: Smoke candidate dependency resolution
         run: >-
           cargo
           --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
@@ -97,7 +97,7 @@ jobs:
           cargo
           --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
           --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          rustdoc --locked --lib --all-features -- -D missing-docs
+          rustdoc --locked --lib --all-features -- -D warnings -D missing-docs
 
       - name: Run five-minute reusable example
         if: ${{ matrix.full }}
@@ -106,3 +106,24 @@ jobs:
           --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
           --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
           run --locked --no-default-features --example bounded_retrograde
+
+      - name: Generate and verify deterministic sample artifact
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        run: >-
+          cargo
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
+          run --locked -- --sample-label-artifact target/ci-sample-artifact
+          &&
+          cargo
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
+          run --locked -- --verify-artifact target/ci-sample-artifact/manifest.json
+
+      - name: Verify package assembly
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        run: >-
+          cargo
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
+          package --locked

@@ -1,9 +1,9 @@
 //! Partizan-specific dataset schemas, generators, and replay diagnostics.
 //!
 //! This module is retained behind the default `partizan-dataset` feature for
-//! source compatibility with the Partizan research harness. It is not part of
-//! the small reusable retrograde API. Its many diagnostic report fields remain
-//! an unstable research surface in v0.1.
+//! source compatibility with the Partizan research harness. The small reusable
+//! retrograde API lives in [`crate::engine`]. Diagnostic report fields in this
+//! module remain an unstable research surface in v0.1.
 
 #![allow(missing_docs)]
 

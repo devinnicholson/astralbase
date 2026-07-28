@@ -98,6 +98,18 @@ pub fn verify_artifact_manifest(manifest_path: &Path) -> Result<ArtifactManifest
     if !manifest.deterministic {
         return Err("manifest does not declare deterministic generation".to_owned());
     }
+    if manifest.generator.trim().is_empty() {
+        return Err("manifest generator must be non-empty".to_owned());
+    }
+    if manifest.generator_version.trim().is_empty() {
+        return Err("manifest generator_version must be non-empty".to_owned());
+    }
+    if manifest.command.trim().is_empty() {
+        return Err("manifest command must be non-empty".to_owned());
+    }
+    if manifest.files.is_empty() {
+        return Err("manifest must cover at least one payload file".to_owned());
+    }
 
     let base = manifest_path
         .parent()
@@ -163,6 +175,12 @@ mod tests {
         let first_manifest = write_sample_dataset_artifact(&first).unwrap();
         let second_manifest = write_sample_dataset_artifact(&second).unwrap();
         assert_eq!(first_manifest, second_manifest);
+        assert_eq!(first_manifest.files.len(), 1);
+        assert_eq!(first_manifest.files[0].bytes, 5_220);
+        assert_eq!(
+            first_manifest.files[0].sha256,
+            "fb1f096175b8dbbe15b8dbb0bed27ac2ccff7f8179219fc9f446cc8ddb0b1925"
+        );
         assert_eq!(
             fs::read(first.join("sample-label-shard.jsonl")).unwrap(),
             fs::read(second.join("sample-label-shard.jsonl")).unwrap()
@@ -172,8 +190,60 @@ mod tests {
             fs::read(second.join("manifest.json")).unwrap()
         );
         assert_eq!(
+            sha256_hex(&fs::read(first.join("manifest.json")).unwrap()),
+            "0bcdc46b81c684edf5c0391e224980c3dbb608542df404f9c45c987760747531"
+        );
+        assert_eq!(
             verify_artifact_manifest(&first.join("manifest.json")).unwrap(),
             first_manifest
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn manifest_verification_rejects_empty_metadata_and_file_sets() {
+        let root =
+            std::env::temp_dir().join(format!("astralbase-empty-manifest-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+
+        let mut manifest = ArtifactManifest {
+            schema_version: ARTIFACT_MANIFEST_SCHEMA_VERSION.to_owned(),
+            generator: String::new(),
+            generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+            command: "astralbase test fixture".to_owned(),
+            deterministic: true,
+            files: Vec::new(),
+        };
+        let manifest_path = root.join("manifest.json");
+        fs::write(&manifest_path, manifest.to_json().unwrap()).unwrap();
+        assert_eq!(
+            verify_artifact_manifest(&manifest_path),
+            Err("manifest generator must be non-empty".to_owned())
+        );
+
+        manifest.generator = "astralbase.test".to_owned();
+        manifest.generator_version.clear();
+        fs::write(&manifest_path, manifest.to_json().unwrap()).unwrap();
+        assert_eq!(
+            verify_artifact_manifest(&manifest_path),
+            Err("manifest generator_version must be non-empty".to_owned())
+        );
+
+        manifest.generator_version = env!("CARGO_PKG_VERSION").to_owned();
+        manifest.command.clear();
+        fs::write(&manifest_path, manifest.to_json().unwrap()).unwrap();
+        assert_eq!(
+            verify_artifact_manifest(&manifest_path),
+            Err("manifest command must be non-empty".to_owned())
+        );
+
+        manifest.command = "astralbase test fixture".to_owned();
+        fs::write(&manifest_path, manifest.to_json().unwrap()).unwrap();
+        assert_eq!(
+            verify_artifact_manifest(&manifest_path),
+            Err("manifest must cover at least one payload file".to_owned())
         );
 
         fs::remove_dir_all(root).unwrap();

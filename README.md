@@ -3,29 +3,34 @@
 [![CI](https://github.com/devinnicholson/astralbase/actions/workflows/ci.yml/badge.svg)](https://github.com/devinnicholson/astralbase/actions/workflows/ci.yml)
 
 Astralbase is an experimental Rust library for bounded, in-memory retrograde
-exploration of orthodox chess positions. Its reusable surface consists of
+exploration of orthodox chess positions. Its reusable surface provides
 candidate predecessor generation and queue-based `Win`/`Loss` propagation from
-caller-declared seeds. The default `partizan-dataset` feature also retains the
-historical schemas and generators used by the Partizan research project.
+caller-declared seeds. The default `partizan-dataset` feature retains the
+versioned schemas, generators, replay checks, and diagnostics used by the
+Partizan research suite.
 
-Astralbase v0.1 is not a complete chess tablebase, a draw solver, or a CGT
-canonical-form engine. It has no persistent tablebase format or completeness
-certificate.
+Astralbase v0.1 covers bounded predecessor exploration and proof propagation.
+Draw solving, CGT canonicalization, persistent tablebases, and completeness
+certificates lie outside its scope.
 
-The package has not been published yet. It is licensed
-[GPL-3.0-or-later](LICENSE), matching its direct dependency on
+The package is awaiting its first publication. It requires Rust 1.88 or newer
+and uses [GPL-3.0-or-later](LICENSE), matching its direct dependency on
 [Shakmaty](https://github.com/niklasf/shakmaty) (GPL-3.0).
 
 ## Five-minute reusable example
 
-Run the checked library example without the Partizan dataset layer:
+Bitmesh and Thermograph are unpublished `0.1.0` dependencies. From sibling
+checkouts, supply local patches only on the Cargo command line:
 
 ```console
-cargo run --no-default-features --example bounded_retrograde
+cargo \
+  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
+  --config 'patch."crates-io".thermograph.path="../thermograph"' \
+  run --locked --no-default-features --example bounded_retrograde
 ```
 
-It declares Fool's Mate as `Loss(0)`, expands one queued position, and reports
-the discovered `Win(1)` parents. The expected final lines include:
+The example declares Fool's Mate as `Loss(0)`, expands one queued position, and
+reports the discovered `Win(1)` parents. Its final lines include:
 
 ```text
 expanded=1
@@ -51,99 +56,111 @@ assert_eq!(engine.probe(&terminal), ProbeResult::Present(GameValue::Loss(0)));
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-Astralbase trusts the supplied seed. In research workflows, terminality and the
-seed value must come from a cited rules oracle or independently validated input.
+The caller supplies terminality and seed value. Research workflows should
+ground both in a cited rules oracle or independently validated input.
 
-## Exact v0.1 semantics
+## Executable v0.1 semantics
 
-Distances are plies (half-moves) from the represented side-to-move position to
-a declared terminal seed.
+Distances count plies from the represented side-to-move position to a declared
+terminal seed.
 
-| API result | Meaning | Not implied |
+| API result | Meaning | Boundary |
 | --- | --- | --- |
-| `Win(n)` | The side to move has a discovered route to a seeded loss in `n` plies. v0.1 records the first proving loss child. | A globally minimal distance-to-mate value, general completeness, or a rules draw. |
-| `Loss(n)` | Every legal child has been proved `Win`; the losing side delays, so `n = 1 + max(child distances)`. | A value for positions whose children have not all been proved. |
-| `Unknown` | The row is stored but no win/loss proof is recorded. | Draw, stalemate, insufficient material, or absence. |
-| `Absent` | `probe` found no row for the position. | `Unknown`, draw, or proof that no forced result exists. |
+| `Win(n)` | The side to move has a discovered route to a seeded loss in `n` plies. v0.1 records the first proving loss child. | Global minimum distance, general completeness, and rules draws remain open. |
+| `Loss(n)` | Every legal child has been proved `Win`; the losing side delays, so `n = 1 + max(child distances)`. | Positions with unresolved children remain unproved. |
+| `Unknown` | The row is stored without a win/loss proof. | Draw, stalemate, insufficient material, and absence have separate meanings. |
+| `Absent` | `probe` found no stored row. | This is a table-membership result only. |
 
-Queue order does not choose a losing distance. The engine records the maximum
-winning-child distance before producing a loss. Distance arithmetic saturates
-at `u32::MAX`; v0.1 does not support longer certified distances.
+Queue order leaves a losing distance unchanged because the engine records the
+maximum winning-child distance before producing a loss. Distance arithmetic
+saturates at `u32::MAX`, the v0.1 distance ceiling.
 
 ## Supported domain and limits
 
 The reusable engine accepts any legal `shakmaty::Chess` position that fits in
-memory. It has no built-in piece cap. `solve(max_expansions)` is an explicit
-work bound, and all state is lost when the process exits.
+memory. It has no built-in piece cap. `solve(max_expansions)` supplies an
+explicit work bound, and all state disappears when the process exits.
 
 Immediate transition handling includes ordinary moves, captures, promotions,
 en passant, and standard castling. Inverse parents preserve side to move and
-reconstruct relevant castling/en-passant state where possible. Tests replay
-each emitted parent with `shakmaty`; that is a same-library consistency check,
-not independent validation.
+reconstruct relevant castling and en-passant state where possible. Tests replay
+each emitted parent with `shakmaty`, establishing same-library consistency.
+Independent rules evidence comes from the separately maintained python-chess
+validation lane.
 
-The engine does **not** model or prove:
+The engine scope excludes:
 
-- threefold/fivefold repetition or position history;
+- threefold/fivefold repetition and position history;
 - the fifty-/seventy-five-move rules;
-- dead positions or insufficient-material draws;
+- dead positions and insufficient-material draws;
 - stalemate/draw propagation;
-- exhaustive enumeration or proof that predecessor generation is complete;
-- persistent or distributed tablebases;
-- CGT values, canonical forms, temperatures, or additive decomposition.
+- exhaustive enumeration and predecessor-completeness proofs;
+- persistent or distributed tablebases; and
+- CGT values, canonical forms, temperatures, and additive decomposition.
 
 The optional Partizan domain gate is narrower: legal standard 8×8 FEN, at most
 eight pieces, no castling rights, and no en-passant target. A non-terminal
 position also needs an immediate terminal tactic or a strict Bitmesh structural
-certificate. That certificate is not a full game-tree decomposition theorem.
+certificate. The certificate covers the supplied board and Bitmesh's documented
+one-ply screen.
 
 ## Partizan dataset feature
 
 `partizan-dataset` is enabled by default for source compatibility. It adds
-Bitmesh/Thermograph-backed dataset schemas, experimental selection diagnostics,
-and the CLI binary. Use `--no-default-features` when only the reusable engine is
-needed.
+Bitmesh/Thermograph-backed dataset schemas, experimental diagnostics, artifact
+manifests, and the CLI binary. Use `--no-default-features` for the reusable
+engine alone.
 
-Generate a deterministic sample shard with a SHA-256 manifest:
+The dataset layer exposes four disjoint label kinds under
+`partizan.dataset_label.v0`: `exact`, `rejected`, `heuristic`, and `prediction`.
+`parse_and_validate_jsonl` checks row shape and provenance requirements.
+Composition replay functions perform the narrower recomputations named in
+their APIs. Schema validation leaves chess rules, component values, and
+learning efficacy to their respective validation lanes.
 
-```console
-cargo run -- --sample-label-artifact target/sample-artifact
-cargo run -- --verify-artifact target/sample-artifact/manifest.json
-```
-
-The manifest contains no timestamp or host path. Repeated runs of one package
-version produce byte-identical payload and manifest files.
-
-Historical Partizan research commands remain available; list them with:
-
-```console
-cargo run -- --help
-```
-
-The dataset diagnostics are an unstable research surface. They are separated
-from the reusable engine by the `partizan-dataset` feature and are not evidence
-that a learning model benefits from CGT supervision.
-
-## Installation and release-candidate testing
-
-After Bitmesh, Thermograph, and Astralbase `0.1.0` are published, a standalone
-consumer will use ordinary versioned dependencies. Astralbase intentionally no
-longer commits sibling `path` dependencies.
-
-Until the two upstream crates are published, fresh Cargo resolution from a
-clean clone is a **G2 release blocker**, even when optional features are off.
-Maintainers testing the frozen release
-candidates can provide non-committed Cargo patches:
+Generate and verify the deterministic sample artifact:
 
 ```console
 cargo \
   --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
   --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  test --locked --all-targets --all-features
+  run --locked -- --sample-label-artifact target/sample-artifact
+cargo \
+  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
+  --config 'patch."crates-io".thermograph.path="../thermograph"' \
+  run --locked -- --verify-artifact target/sample-artifact/manifest.json
 ```
 
-Before a longer check, verify that Cargo actually resolves both unpublished
-release candidates through the patches:
+The manifest contains no timestamp or host path. Repeated runs of v0.1 produce
+byte-identical files:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `sample-label-shard.jsonl` | 5,220 | `fb1f096175b8dbbe15b8dbb0bed27ac2ccff7f8179219fc9f446cc8ddb0b1925` |
+| `manifest.json` | 411 | `0bcdc46b81c684edf5c0391e224980c3dbb608542df404f9c45c987760747531` |
+
+List all bounded generation and replay commands with:
+
+```console
+cargo \
+  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
+  --config 'patch."crates-io".thermograph.path="../thermograph"' \
+  run --locked -- --help
+```
+
+The diagnostic report structs remain an unstable Rust surface in v0.1. Model
+benefit requires a separate learning experiment.
+
+## Installation and release-candidate testing
+
+After Bitmesh, Thermograph, and Astralbase `0.1.0` reach a registry, consumers
+can use ordinary versioned dependencies. Repository files contain no sibling
+path dependency or absolute developer path.
+
+Until upstream publication, fresh Cargo resolution from a standalone clone is
+a release blocker, including no-default-feature resolution. Maintainers can
+test sibling working trees with the command-line patches shown above. Begin
+with the inexpensive dependency check:
 
 ```console
 cargo \
@@ -152,13 +169,13 @@ cargo \
   check --locked --no-default-features
 ```
 
-Quoting `"crates-io"` is required because it is one Cargo configuration-table
-key; the superficially similar `patch.crates-io...` spelling does not select
-the intended registry patch table.
+Quoting `"crates-io"` addresses the intended Cargo configuration-table key.
 
-No absolute developer path is stored in `Cargo.toml` or `.cargo/config.toml`.
-The frozen upstream candidate commits for this branch are recorded in
-`CHANGELOG.md`.
+The reviewed upstream candidates are Bitmesh
+`b7c7858df2365d8ea4bd2f50ff2afbd51a6f8225` and Thermograph
+`c0f1aae399ff66b0d42681e9735aa1ff889d0816`. CI checks out those exact
+revisions. Astralbase's versioned dependency specifications remain blocked on
+registry publication.
 
 ## Validation status
 
@@ -167,27 +184,34 @@ seed retention, zero-budget behavior, propagation, delaying loss distance,
 `Absent`/`Unknown` distinctions, and targeted quiet-move, promotion, en-passant,
 and castling transitions.
 
-These candidate-side tests use `shakmaty`, so they do not count as independent
-rules validation. Suite-level independent validation with python-chess 1.11.2
-passed against this candidate; its structured result has SHA-256
+Candidate-side Shakmaty tests establish same-library consistency. A
+python-chess 1.11.2 lane passed against an earlier committed integration
+baseline; its structured result has SHA-256
 `0facb6f25c995ab217528de48cb29fb537b5a174b92bdd8ef6d53e82eb04dc0d`.
-The raw evidence is maintained in the Partizan-Fugue suite rather than this
-repository. Repetition, fifty-/seventy-five-move handling, draw completeness,
-persistence, and large-scale generation remain explicitly outside v0.1.
+The raw evidence lives in the Partizan-Fugue suite. The reviewed upstream
+integration requires a refreshed independent result against the pinned
+candidate commits.
+
+Repetition, fifty-/seventy-five-move handling, draw completeness, persistence,
+large-scale generation, and model-benefit claims remain outside v0.1.
 
 ## Development
 
-Rust 1.88 or newer is supported. The release checks are:
+Run `cargo fmt --check` directly. Add the two command-line patches to every
+other command during the pre-publication candidate phase:
 
 ```text
-cargo fmt --check
-cargo clippy --locked --all-targets --all-features -- -D warnings
-cargo test --locked --all-targets --all-features
-cargo rustdoc --locked --lib --all-features -- -D missing-docs
+cargo clippy <PATCHES> --locked --all-targets --all-features -- -D warnings
+cargo <PATCHES> test --locked --all-targets --all-features
+cargo <PATCHES> rustdoc --locked --lib --all-features -- -D warnings -D missing-docs
+cargo <PATCHES> run --locked --no-default-features --example bounded_retrograde
+cargo <PATCHES> package --locked
 ```
 
-During the pre-publication release-candidate phase, add the two command-line
-patches shown above to Cargo commands that enable `partizan-dataset`.
+`<PATCHES>` means the two `--config` arguments shown above. For `clippy`, place
+them after the subcommand as displayed.
 
-See `CONTRIBUTING.md` for validation expectations, `CHANGELOG.md` for the
-candidate contract, and `CITATION.cff` for citation metadata.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for validation expectations,
+[CHANGELOG.md](CHANGELOG.md) for the candidate contract,
+[docs/formal_domain.md](docs/formal_domain.md) for dataset domains, and
+[CITATION.cff](CITATION.cff) for citation metadata.

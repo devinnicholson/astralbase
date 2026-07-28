@@ -9,7 +9,7 @@ roadmap items.
 1. State whether the change affects the reusable retrograde API, the optional
    Partizan dataset surface, or both.
 2. Add a small deterministic fixture before changing an algorithm.
-3. Identify expected-result provenance. Candidate output cannot validate itself.
+3. Ground expected results in a hand derivation or independent oracle.
 4. Update the README and changelog when semantics, scope, or limitations change.
 5. Astralbase is licensed [GPL-3.0-or-later](LICENSE). Contribution review
    still waits on separate contributor terms (e.g. a CLA/DCO).
@@ -17,7 +17,8 @@ roadmap items.
 ## Validation rules
 
 - A `shakmaty` replay of an Astralbase inverse move is a same-library consistency
-  test. Label it that way; do not present it as an independent chess oracle.
+  test. Label it accordingly and use a separate chess oracle for independent
+  evidence.
 - Changes to promotions, en passant, castling, or FEN normalization also require
   comparison with the frozen python-chess lane in the Partizan validation
   protocol before release sign-off.
@@ -46,19 +47,25 @@ Use both patch arguments for full-feature checks:
 cargo fmt --check
 cargo clippy <PATCHES> --locked --all-targets --all-features -- -D warnings
 cargo <PATCHES> test --locked --all-targets --all-features
-cargo <PATCHES> rustdoc --locked --lib --all-features -- -D missing-docs
+cargo <PATCHES> rustdoc --locked --lib --all-features -- -D warnings -D missing-docs
 cargo <PATCHES> run --locked --no-default-features --example bounded_retrograde
+cargo <PATCHES> package --locked
 ```
 
 `cargo-clippy` forwards configuration reliably when `<PATCHES>` follows the
 `clippy` subcommand, as shown above. The other built-in Cargo subcommands accept
 the patch arguments in the global position.
 
-Do not commit absolute path patches or a developer-specific `.cargo/config.toml`.
+Keep absolute path patches and developer-specific `.cargo/config.toml` files
+outside version control.
+
+Before release sign-off, confirm that the reviewed Bitmesh and Thermograph
+commit pins remain current, refresh registry lock resolution, and rerun the
+independent validation lane.
 
 ## Pull-request evidence
 
 Include the exact commands, toolchain versions, pass/fail counts, wall time for
 the full generator suite, changed public semantics, and unresolved independent
-validation gaps. Large generated files belong in a versioned artifact release,
-not an undocumented temporary directory.
+validation gaps. Publish large generated files through a versioned artifact
+release with a manifest.
