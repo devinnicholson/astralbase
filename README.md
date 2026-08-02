@@ -17,6 +17,30 @@ The package is awaiting its first publication. It requires Rust 1.88 or newer
 and uses [GPL-3.0-or-later](LICENSE), matching its direct dependency on
 [Shakmaty](https://github.com/niklasf/shakmaty) (GPL-3.0).
 
+## Status and role
+
+| Item | Current state |
+| --- | --- |
+| Crate | `astralbase` 0.1.0 research candidate |
+| Reusable core | In-memory predecessor exploration and `Win`/`Loss` propagation |
+| Default feature | `partizan-dataset` research schemas and artifact tooling |
+| Minimum Rust | 1.88 |
+| License | GPL-3.0-or-later |
+| Registry release | Pending on Bitmesh and Thermograph 0.1.0 |
+
+Astralbase is the bounded search layer in the
+[Partizan](https://github.com/devinnicholson/partizan) stack. It obtains chess
+transitions from Shakmaty, may consume conservative board certificates from
+[Bitmesh](https://github.com/devinnicholson/bitmesh), and may attach explicit
+finite-game identities from
+[Thermograph](https://github.com/devinnicholson/thermograph) in the optional
+dataset feature. The reusable retrograde engine itself has no CGT or
+decomposition dependency.
+
+Authority remains separated: callers declare terminal seeds, Astralbase
+propagates only the bounded proof consequences recorded by the engine, and
+Partizan decides whether a resulting artifact satisfies a research protocol.
+
 ## Five-minute reusable example
 
 Bitmesh and Thermograph are unpublished `0.1.0` dependencies. From sibling
