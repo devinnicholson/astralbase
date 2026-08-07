@@ -36,4 +36,3 @@ Astralbase releases follow Bitmesh and Thermograph because the optional
 - [ ] Publish, create an immutable `v0.1.x` tag, and create the GitHub release.
 - [ ] Confirm docs.rs built with all features.
 - [ ] Record the crate checksum and release provenance.
-

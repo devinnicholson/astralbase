@@ -19,4 +19,3 @@ that can be misrepresented as an exhaustive chess result is also in scope.
 
 The maintainer will acknowledge a complete report within seven days. No
 embargo or remediation date is promised for this pre-release project.
-

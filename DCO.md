@@ -20,4 +20,3 @@ authorized to use:
 ```text
 Signed-off-by: Contributor Name <contributor@example.com>
 ```
-

@@ -18,4 +18,3 @@
 - [ ] Schema or certificate changes are explicitly versioned.
 - [ ] Documentation and changelog describe any changed contract.
 - [ ] Every commit includes a DCO `Signed-off-by` trailer.
-

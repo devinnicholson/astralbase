@@ -12,7 +12,7 @@ import chess
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests" / "fixtures" / "python_chess_transitions_v1.tsv"
-EXPECTED_FIXTURE_SHA256 = "d35138b98ace8a77f42fae19d2baafe82c3acf2e9342e056f5a2fa820d8cc272"
+EXPECTED_FIXTURE_SHA256 = "b11aa5f38b5defcd63c075dc669bebf0fa503fceeceb7d682d2123084f7de579"
 
 
 def main() -> None:

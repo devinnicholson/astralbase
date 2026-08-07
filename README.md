@@ -219,7 +219,7 @@ and castling transitions.
 Candidate-side Shakmaty tests establish same-library consistency. A
 python-chess 1.11.2 lane independently replays the same frozen quiet,
 promotion, en-passant, and castling transitions. The shared fixture has SHA-256
-`d35138b98ace8a77f42fae19d2baafe82c3acf2e9342e056f5a2fa820d8cc272`.
+`b11aa5f38b5defcd63c075dc669bebf0fa503fceeceb7d682d2123084f7de579`.
 CI executes both the independent forward-rules check and Astralbase's inverse
 generation check. These cases support transition correctness at the named
 rules edges; they do not establish predecessor completeness.
