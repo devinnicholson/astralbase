@@ -46,8 +46,8 @@ All notable changes to Astralbase are recorded here. The project follows
 
 ### Release-candidate inputs
 
-- Bitmesh `b7c7858df2365d8ea4bd2f50ff2afbd51a6f8225`
-- Thermograph `381e88dad1a1259a4ccc1a015537f8a8acaf7474`
+- Bitmesh `410550c0964004cd7ba9677539f17ae82c139dd8`
+- Thermograph `32d6bfbc966f47a87e7249d4ed8818370288e079`
 - Partizan validation corpus `starter-corpus-v0.1.json`
 
 The reviewed upstream commits and CI pins are frozen above. Release sign-off

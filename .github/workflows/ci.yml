@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: devinnicholson/bitmesh
-          ref: b7c7858df2365d8ea4bd2f50ff2afbd51a6f8225
+          ref: 410550c0964004cd7ba9677539f17ae82c139dd8
           path: _upstream/bitmesh
           persist-credentials: false
 
@@ -46,7 +46,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: devinnicholson/thermograph
-          ref: 381e88dad1a1259a4ccc1a015537f8a8acaf7474
+          ref: 32d6bfbc966f47a87e7249d4ed8818370288e079
           path: _upstream/thermograph
           persist-credentials: false
 

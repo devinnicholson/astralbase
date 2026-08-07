@@ -204,8 +204,8 @@ cargo \
 Quoting `"crates-io"` addresses the intended Cargo configuration-table key.
 
 The reviewed upstream candidates are Bitmesh
-`b7c7858df2365d8ea4bd2f50ff2afbd51a6f8225` and Thermograph
-`381e88dad1a1259a4ccc1a015537f8a8acaf7474`. CI checks out those exact
+`410550c0964004cd7ba9677539f17ae82c139dd8` and Thermograph
+`32d6bfbc966f47a87e7249d4ed8818370288e079`. CI checks out those exact
 revisions. Astralbase's versioned dependency specifications remain blocked on
 registry publication.
 
