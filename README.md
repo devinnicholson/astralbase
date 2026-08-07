@@ -5,7 +5,7 @@
 Astralbase is an experimental Rust library for bounded, in-memory retrograde
 exploration of orthodox chess positions. Its reusable surface provides
 candidate predecessor generation and queue-based `Win`/`Loss` propagation from
-caller-declared seeds. The default `partizan-dataset` feature retains the
+caller-declared seeds. The opt-in `partizan-dataset` feature provides the
 versioned schemas, generators, replay checks, and diagnostics used by the
 Partizan research suite.
 
@@ -23,7 +23,8 @@ and uses [GPL-3.0-or-later](LICENSE), matching its direct dependency on
 | --- | --- |
 | Crate | `astralbase` 0.1.0 research candidate |
 | Reusable core | In-memory predecessor exploration and `Win`/`Loss` propagation |
-| Default feature | `partizan-dataset` research schemas and artifact tooling |
+| Default feature set | Reusable bounded retrograde core only |
+| Optional feature | `partizan-dataset` research schemas, artifact tooling, and CLI |
 | Minimum Rust | 1.88 |
 | License | GPL-3.0-or-later |
 | Registry release | Pending on Bitmesh and Thermograph 0.1.0 |
@@ -50,7 +51,7 @@ checkouts, supply local patches only on the Cargo command line:
 cargo \
   --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
   --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  run --locked --no-default-features --example bounded_retrograde
+  run --locked --example bounded_retrograde
 ```
 
 The example declares Fool's Mate as `Loss(0)`, expands one queued position, and
@@ -130,10 +131,10 @@ one-ply screen.
 
 ## Partizan dataset feature
 
-`partizan-dataset` is enabled by default for source compatibility. It adds
-Bitmesh/Thermograph-backed dataset schemas, experimental diagnostics, artifact
-manifests, and the CLI binary. Use `--no-default-features` for the reusable
-engine alone.
+`partizan-dataset` is an explicit opt-in. It adds Bitmesh/Thermograph-backed
+dataset schemas, experimental diagnostics, artifact manifests, and the CLI
+binary. Applications using only the reusable engine do not compile or expose
+the Partizan research surface.
 
 The dataset layer exposes four disjoint label kinds under
 `partizan.dataset_label.v0`: `exact`, `rejected`, `heuristic`, and `prediction`.
@@ -142,17 +143,23 @@ Composition replay functions perform the narrower recomputations named in
 their APIs. Schema validation leaves chess rules, component values, and
 learning efficacy to their respective validation lanes.
 
+The dataset implementation separates public schemas, validation, replay
+reports, artifact manifests, and generation code. Existing flat
+`astralbase::dataset_label::*` imports remain source-compatible; organized
+paths under `dataset_label::schema`, `dataset_label::validation`, and
+`dataset_label::replay` are also available.
+
 Generate and verify the deterministic sample artifact:
 
 ```console
 cargo \
   --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
   --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  run --locked -- --sample-label-artifact target/sample-artifact
+  run --locked --features partizan-dataset -- --sample-label-artifact target/sample-artifact
 cargo \
   --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
   --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  run --locked -- --verify-artifact target/sample-artifact/manifest.json
+  run --locked --features partizan-dataset -- --verify-artifact target/sample-artifact/manifest.json
 ```
 
 The manifest contains no timestamp or host path. Repeated runs of v0.1 produce
@@ -169,7 +176,7 @@ List all bounded generation and replay commands with:
 cargo \
   --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
   --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  run --locked -- --help
+  run --locked --features partizan-dataset -- --help
 ```
 
 The diagnostic report structs remain an unstable Rust surface in v0.1. Model
@@ -182,7 +189,8 @@ can use ordinary versioned dependencies. Repository files contain no sibling
 path dependency or absolute developer path.
 
 Until upstream publication, fresh Cargo resolution from a standalone clone is
-a release blocker, including no-default-feature resolution. Maintainers can
+a release blocker because Cargo still resolves optional versioned dependencies.
+Maintainers can
 test sibling working trees with the command-line patches shown above. Begin
 with the inexpensive dependency check:
 
@@ -209,12 +217,19 @@ seed retention, zero-budget behavior, propagation, delaying loss distance,
 and castling transitions.
 
 Candidate-side Shakmaty tests establish same-library consistency. A
-python-chess 1.11.2 lane passed against an earlier committed integration
-baseline; its structured result has SHA-256
-`0facb6f25c995ab217528de48cb29fb537b5a174b92bdd8ef6d53e82eb04dc0d`.
-The raw evidence lives in the Partizan-Fugue suite. The reviewed upstream
-integration requires a refreshed independent result against the pinned
-candidate commits.
+python-chess 1.11.2 lane independently replays the same frozen quiet,
+promotion, en-passant, and castling transitions. The shared fixture has SHA-256
+`d35138b98ace8a77f42fae19d2baafe82c3acf2e9342e056f5a2fa820d8cc272`.
+CI executes both the independent forward-rules check and Astralbase's inverse
+generation check. These cases support transition correctness at the named
+rules edges; they do not establish predecessor completeness.
+
+Run the independent lane with:
+
+```console
+python -m pip install -r requirements-oracle.txt
+python scripts/verify_python_chess_oracle.py
+```
 
 Repetition, fifty-/seventy-five-move handling, draw completeness, persistence,
 large-scale generation, and model-benefit claims remain outside v0.1.
@@ -228,7 +243,7 @@ other command during the pre-publication candidate phase:
 cargo clippy <PATCHES> --locked --all-targets --all-features -- -D warnings
 cargo <PATCHES> test --locked --all-targets --all-features
 cargo <PATCHES> rustdoc --locked --lib --all-features -- -D warnings -D missing-docs
-cargo <PATCHES> run --locked --no-default-features --example bounded_retrograde
+cargo <PATCHES> run --locked --example bounded_retrograde
 cargo <PATCHES> package --locked
 ```
 

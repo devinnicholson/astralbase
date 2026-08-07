@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a reproducible Astralbase defect
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Security reports belong in private security advisories.
+  - type: input
+    id: version
+    attributes:
+      label: Astralbase version or commit
+    validations:
+      required: true
+  - type: input
+    id: rust
+    attributes:
+      label: Rust version and platform
+    validations:
+      required: true
+  - type: input
+    id: features
+    attributes:
+      label: Enabled features
+      placeholder: default core or partizan-dataset
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Include the exact command and the smallest FEN or artifact that reproduces the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and observed behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: semantics
+    attributes:
+      label: Scope confirmation
+      options:
+        - label: I have not interpreted `Unknown`, `Absent`, or a work-budget cutoff as a proved draw.
+          required: true
+

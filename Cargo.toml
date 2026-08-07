@@ -14,7 +14,7 @@ keywords = ["chess", "retrograde", "tablebase", "cgt", "research"]
 categories = ["algorithms", "game-development", "science"]
 
 [features]
-default = ["partizan-dataset"]
+default = []
 partizan-dataset = ["dep:bitmesh", "dep:ring", "dep:serde", "dep:serde_json", "dep:thermograph"]
 
 [dependencies]
@@ -33,6 +33,11 @@ required-features = ["partizan-dataset"]
 [[test]]
 name = "domain_gate_generator"
 path = "tests/domain_gate_generator.rs"
+required-features = ["partizan-dataset"]
+
+[[test]]
+name = "discovery_contract"
+path = "tests/discovery_contract.rs"
 required-features = ["partizan-dataset"]
 
 [package.metadata.docs.rs]

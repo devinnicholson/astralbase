@@ -18,13 +18,23 @@ All notable changes to Astralbase are recorded here. The project follows
 - CI, citation metadata, contribution guidance, and strict reusable-API docs.
 - Manifest validation for non-empty generator metadata and payload coverage.
 - Golden v0.1 sample-artifact byte lengths and SHA-256 fixtures.
+- A shared transition corpus checked by both Astralbase/Shakmaty and a pinned
+  python-chess 1.11.2 independent rules lane.
+- Duplicate-parent, attacked-castling, work-budget, and epistemic-state
+  regression coverage.
+- Security, support, DCO, contribution templates, Dependabot, and a release
+  checklist.
 
 ### Changed
 
 - Moved the reusable engine implementation to `engine` while preserving root
   re-exports of `GameValue` and `RetrogradeEngine`.
-- Isolated Partizan-specific dataset generation behind the default
-  `partizan-dataset` feature.
+- Made the bounded retrograde core the default crate surface; Partizan dataset
+  schemas, generation, replay diagnostics, dependencies, and CLI require the
+  explicit `partizan-dataset` feature.
+- Split dataset schemas, validation, replay reports, and module tests out of the
+  generator implementation without changing schema identifiers or serialized
+  sample artifacts.
 - Replaced mandatory sibling dependencies with versioned `0.1.0` specifications.
 - Narrowed public claims to bounded, in-memory retrograde exploration; draw
   completeness, persistence, exhaustive tablebases, and CGT values are

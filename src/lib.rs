@@ -1,7 +1,7 @@
 //! Bounded, in-memory retrograde exploration for constrained chess research.
 //!
 //! The reusable engine is available with no optional features. The
-//! `partizan-dataset` default feature retains the historical dataset-generation
+//! opt-in `partizan-dataset` feature provides the historical dataset-generation
 //! surface used by the Partizan research repository.
 
 #![deny(missing_docs)]

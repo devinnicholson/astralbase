@@ -11,8 +11,9 @@ roadmap items.
 2. Add a small deterministic fixture before changing an algorithm.
 3. Ground expected results in a hand derivation or independent oracle.
 4. Update the README and changelog when semantics, scope, or limitations change.
-5. Astralbase is licensed [GPL-3.0-or-later](LICENSE). Contribution review
-   still waits on separate contributor terms (e.g. a CLA/DCO).
+5. Astralbase is licensed [GPL-3.0-or-later](LICENSE). Every commit must carry
+   a Developer Certificate of Origin sign-off as described in
+   [DCO.md](DCO.md).
 
 ## Validation rules
 
@@ -48,7 +49,7 @@ cargo fmt --check
 cargo clippy <PATCHES> --locked --all-targets --all-features -- -D warnings
 cargo <PATCHES> test --locked --all-targets --all-features
 cargo <PATCHES> rustdoc --locked --lib --all-features -- -D warnings -D missing-docs
-cargo <PATCHES> run --locked --no-default-features --example bounded_retrograde
+cargo <PATCHES> run --locked --example bounded_retrograde
 cargo <PATCHES> package --locked
 ```
 

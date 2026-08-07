@@ -56,6 +56,18 @@ jobs:
           toolchain: ${{ matrix.rust }}
           components: clippy,rustfmt
 
+      - name: Install independent chess oracle
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v4
+        with:
+          python-version: "3.12"
+
+      - name: Verify frozen transitions with python-chess
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        run: |
+          python -m pip install -r requirements-oracle.txt
+          python scripts/verify_python_chess_oracle.py
+
       - name: Smoke candidate dependency resolution
         run: >-
           cargo
@@ -70,6 +82,14 @@ jobs:
           --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
           --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
           test --locked --no-default-features --lib
+
+      - name: Test default reusable surface
+        if: ${{ matrix.full }}
+        run: >-
+          cargo
+          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
+          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
+          test --locked --no-default-features --lib --tests
 
       - name: Check formatting
         if: ${{ matrix.full }}
@@ -113,12 +133,12 @@ jobs:
           cargo
           --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
           --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          run --locked -- --sample-label-artifact target/ci-sample-artifact
+          run --locked --features partizan-dataset -- --sample-label-artifact target/ci-sample-artifact
           &&
           cargo
           --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
           --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          run --locked -- --verify-artifact target/ci-sample-artifact/manifest.json
+          run --locked --features partizan-dataset -- --verify-artifact target/ci-sample-artifact/manifest.json
 
       - name: Verify package assembly
         if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'

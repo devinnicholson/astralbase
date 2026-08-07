@@ -1,0 +1,6 @@
+case_id	move_kind	parent_fen	uci	child_fen
+quiet-pawn	quiet	4k3/8/8/8/8/8/4P3/4K3 w - - 0 1	e2e3	4k3/8/8/8/8/4P3/8/4K3 b - - 0 1
+promotion-queen	promotion	4k3/P7/8/8/8/8/8/4K3 w - - 0 1	a7a8q	Q3k3/8/8/8/8/8/8/4K3 b - - 0 1
+en-passant	en-passant	4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1	e5d6	4k3/8/3P4/8/8/8/8/4K3 b - - 0 1
+castling-kingside	castling	4k2r/8/8/8/8/8/8/4K2R w Kk - 0 1	e1g1	4k2r/8/8/8/8/8/8/5RK1 b k - 1 1
+
