@@ -24,7 +24,9 @@ Astralbase releases follow Bitmesh and Thermograph because the optional
 - [ ] deterministic sample generation and artifact replay
 - [ ] `cargo package --locked`
 - [ ] inspect `cargo package --list`
-- [ ] test the packaged crate from a clean consumer project
+- [ ] extract the exact `.crate` archive and run its no-default core tests
+- [ ] run all targets from the extracted archive with `partizan-dataset`
+- [ ] test the packaged crate from a separate clean consumer project
 - [ ] run advisory and license checks
 
 ## Publication

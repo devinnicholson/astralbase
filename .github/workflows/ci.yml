@@ -147,3 +147,23 @@ jobs:
           --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
           --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
           package --locked
+
+      - name: Test exact packaged source
+        if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
+        shell: bash
+        run: |
+          mkdir -p target/package/extracted-ci
+          tar -xzf target/package/astralbase-0.1.0.crate -C target/package/extracted-ci
+          packaged_manifest="target/package/extracted-ci/astralbase-0.1.0/Cargo.toml"
+
+          cargo \
+            --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"' \
+            --config 'patch."crates-io".thermograph.path="_upstream/thermograph"' \
+            test --locked --manifest-path "$packaged_manifest" \
+            --no-default-features --lib --tests
+
+          cargo \
+            --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"' \
+            --config 'patch."crates-io".thermograph.path="_upstream/thermograph"' \
+            test --locked --manifest-path "$packaged_manifest" \
+            --all-targets --features partizan-dataset
