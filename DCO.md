@@ -1,14 +1,40 @@
-# Developer Certificate of Origin
+Developer Certificate of Origin
+Version 1.1
 
-Contributions use the Developer Certificate of Origin 1.1. By adding a
-`Signed-off-by` trailer to a commit, a contributor certifies that they have the
-right to submit the contribution under this repository's license and agrees
-that the contribution and sign-off are public records.
+Copyright (C) 2004, 2006 The Linux Foundation and its contributors.
 
-The complete DCO 1.1 is maintained at
-<https://developercertificate.org/>.
+Everyone is permitted to copy and distribute verbatim copies of this
+license document, but changing it is not allowed.
 
-Sign commits with:
+Developer's Certificate of Origin 1.1
+
+By making a contribution to this project, I certify that:
+
+(a) The contribution was created in whole or in part by me and I
+    have the right to submit it under the open source license
+    indicated in the file; or
+
+(b) The contribution is based upon previous work that, to the best
+    of my knowledge, is covered under an appropriate open source
+    license and I have the right under that license to submit that
+    work with modifications, whether created in whole or in part
+    by me, under the same open source license (unless I am
+    permitted to submit under a different license), as indicated
+    in the file; or
+
+(c) The contribution was provided directly to me by some other
+    person who certified (a), (b) or (c) and I have not modified
+    it.
+
+(d) I understand and agree that this project and the contribution
+    are public and that a record of the contribution (including all
+    personal information I submit with it, including my sign-off) is
+    maintained indefinitely and may be redistributed consistent with
+    this project or the open source license(s) involved.
+
+Astralbase sign-off instructions
+
+Add the DCO trailer with:
 
 ```console
 git commit --signoff
