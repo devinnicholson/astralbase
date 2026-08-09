@@ -34,22 +34,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check out reviewed Bitmesh 0.1.0 candidate
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: devinnicholson/bitmesh
-          ref: 410550c0964004cd7ba9677539f17ae82c139dd8
-          path: _upstream/bitmesh
-          persist-credentials: false
-
-      - name: Check out reviewed Thermograph 0.1.0 candidate
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: devinnicholson/thermograph
-          ref: 32d6bfbc966f47a87e7249d4ed8818370288e079
-          path: _upstream/thermograph
-          persist-credentials: false
-
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
@@ -69,27 +53,15 @@ jobs:
           python scripts/verify_python_chess_oracle.py
 
       - name: Smoke candidate dependency resolution
-        run: >-
-          cargo
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          check --locked --no-default-features
+        run: cargo check --locked --no-default-features
 
       - name: Test reusable engine on minimum Rust
         if: ${{ !matrix.full }}
-        run: >-
-          cargo
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          test --locked --no-default-features --lib
+        run: cargo test --locked --no-default-features --lib
 
       - name: Test default reusable surface
         if: ${{ matrix.full }}
-        run: >-
-          cargo
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          test --locked --no-default-features --lib --tests
+        run: cargo test --locked --no-default-features --lib --tests
 
       - name: Check formatting
         if: ${{ matrix.full }}
@@ -97,56 +69,30 @@ jobs:
 
       - name: Lint all targets
         if: ${{ matrix.full }}
-        run: >-
-          cargo clippy
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          --locked --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Test all targets
         if: ${{ matrix.full }}
-        run: >-
-          cargo
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          test --locked --all-targets --all-features
+        run: cargo test --locked --all-targets --all-features
 
       - name: Build strict API documentation
         if: ${{ matrix.full }}
-        run: >-
-          cargo
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          rustdoc --locked --lib --all-features -- -D warnings -D missing-docs
+        run: cargo rustdoc --locked --lib --all-features -- -D warnings -D missing-docs
 
       - name: Run five-minute reusable example
         if: ${{ matrix.full }}
-        run: >-
-          cargo
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          run --locked --no-default-features --example bounded_retrograde
+        run: cargo run --locked --no-default-features --example bounded_retrograde
 
       - name: Generate and verify deterministic sample artifact
         if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
         run: >-
-          cargo
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          run --locked --features partizan-dataset -- --sample-label-artifact target/ci-sample-artifact
+          cargo run --locked --features partizan-dataset -- --sample-label-artifact target/ci-sample-artifact
           &&
-          cargo
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          run --locked --features partizan-dataset -- --verify-artifact target/ci-sample-artifact/manifest.json
+          cargo run --locked --features partizan-dataset -- --verify-artifact target/ci-sample-artifact/manifest.json
 
       - name: Verify package assembly
         if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
-        run: >-
-          cargo
-          --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"'
-          --config 'patch."crates-io".thermograph.path="_upstream/thermograph"'
-          package --locked
+        run: cargo package --locked
 
       - name: Test exact packaged source
         if: matrix.os == 'ubuntu-latest' && matrix.rust == 'stable'
@@ -156,14 +102,8 @@ jobs:
           tar -xzf target/package/astralbase-0.1.0.crate -C target/package/extracted-ci
           packaged_manifest="target/package/extracted-ci/astralbase-0.1.0/Cargo.toml"
 
-          cargo \
-            --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"' \
-            --config 'patch."crates-io".thermograph.path="_upstream/thermograph"' \
-            test --locked --manifest-path "$packaged_manifest" \
+          cargo test --locked --manifest-path "$packaged_manifest" \
             --no-default-features --lib --tests
 
-          cargo \
-            --config 'patch."crates-io".bitmesh.path="_upstream/bitmesh"' \
-            --config 'patch."crates-io".thermograph.path="_upstream/thermograph"' \
-            test --locked --manifest-path "$packaged_manifest" \
+          cargo test --locked --manifest-path "$packaged_manifest" \
             --all-targets --features partizan-dataset

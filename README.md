@@ -28,7 +28,7 @@ and uses [GPL-3.0-or-later](LICENSE), matching its direct dependency on
 | Minimum Rust | 1.88 |
 | License | GPL-3.0-or-later |
 | Registry release | Pending on Bitmesh and Thermograph 0.1.0 |
-| Research snapshot | [`v0.1.0-alpha.1`](https://github.com/devinnicholson/astralbase/releases/tag/v0.1.0-alpha.1) |
+| Research snapshot | [`v0.1.0-alpha.2`](https://github.com/devinnicholson/astralbase/releases/tag/v0.1.0-alpha.2) |
 
 Astralbase is the bounded search layer in the
 [Partizan](https://github.com/devinnicholson/partizan) stack. It obtains chess
