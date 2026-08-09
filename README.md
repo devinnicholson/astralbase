@@ -28,6 +28,7 @@ and uses [GPL-3.0-or-later](LICENSE), matching its direct dependency on
 | Minimum Rust | 1.88 |
 | License | GPL-3.0-or-later |
 | Registry release | Pending on Bitmesh and Thermograph 0.1.0 |
+| Research snapshot | [`v0.1.0-alpha.1`](https://github.com/devinnicholson/astralbase/releases/tag/v0.1.0-alpha.1) |
 
 Astralbase is the bounded search layer in the
 [Partizan](https://github.com/devinnicholson/partizan) stack. It obtains chess
@@ -44,14 +45,11 @@ Partizan decides whether a resulting artifact satisfies a research protocol.
 
 ## Five-minute reusable example
 
-Bitmesh and Thermograph are unpublished `0.1.0` dependencies. From sibling
-checkouts, supply local patches only on the Cargo command line:
+The repository configuration pins the reviewed public Bitmesh and Thermograph
+commits, so a standalone clone resolves before those crates reach a registry:
 
 ```console
-cargo \
-  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
-  --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  run --locked --example bounded_retrograde
+cargo run --locked --example bounded_retrograde
 ```
 
 The example declares Fool's Mate as `Loss(0)`, expands one queued position, and
@@ -152,14 +150,8 @@ paths under `dataset_label::schema`, `dataset_label::validation`, and
 Generate and verify the deterministic sample artifact:
 
 ```console
-cargo \
-  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
-  --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  run --locked --features partizan-dataset -- --sample-label-artifact target/sample-artifact
-cargo \
-  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
-  --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  run --locked --features partizan-dataset -- --verify-artifact target/sample-artifact/manifest.json
+cargo run --locked --features partizan-dataset -- --sample-label-artifact target/sample-artifact
+cargo run --locked --features partizan-dataset -- --verify-artifact target/sample-artifact/manifest.json
 ```
 
 The manifest contains no timestamp or host path. Repeated runs of v0.1 produce
@@ -173,10 +165,7 @@ byte-identical files:
 List all bounded generation and replay commands with:
 
 ```console
-cargo \
-  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
-  --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  run --locked --features partizan-dataset -- --help
+cargo run --locked --features partizan-dataset -- --help
 ```
 
 The diagnostic report structs remain an unstable Rust surface in v0.1. Model
@@ -185,29 +174,21 @@ benefit requires a separate learning experiment.
 ## Installation and release-candidate testing
 
 After Bitmesh, Thermograph, and Astralbase `0.1.0` reach a registry, consumers
-can use ordinary versioned dependencies. Repository files contain no sibling
-path dependency or absolute developer path.
-
-Until upstream publication, fresh Cargo resolution from a standalone clone is
-a release blocker because Cargo still resolves optional versioned dependencies.
-Maintainers can
-test sibling working trees with the command-line patches shown above. Begin
-with the inexpensive dependency check:
+can use ordinary versioned dependencies. Until then, `.cargo/config.toml`
+patches the versioned dependencies to reviewed, immutable public commits. It
+contains no sibling path or absolute developer path. A fresh standalone clone
+therefore supports the ordinary dependency check:
 
 ```console
-cargo \
-  --config 'patch."crates-io".bitmesh.path="../bitmesh"' \
-  --config 'patch."crates-io".thermograph.path="../thermograph"' \
-  check --locked --no-default-features
+cargo check --locked --no-default-features
 ```
-
-Quoting `"crates-io"` addresses the intended Cargo configuration-table key.
 
 The reviewed upstream candidates are Bitmesh
 `410550c0964004cd7ba9677539f17ae82c139dd8` and Thermograph
 `32d6bfbc966f47a87e7249d4ed8818370288e079`. CI checks out those exact
 revisions. Astralbase's versioned dependency specifications remain blocked on
-registry publication.
+registry publication for downstream crates; the repository-level commit pins
+cover standalone source builds in the interim.
 
 ## Validation status
 
@@ -236,19 +217,17 @@ large-scale generation, and model-benefit claims remain outside v0.1.
 
 ## Development
 
-Run `cargo fmt --check` directly. Add the two command-line patches to every
-other command during the pre-publication candidate phase:
+The committed configuration supplies the reviewed dependency pins, so the
+normal Cargo commands work in a standalone clone:
 
 ```text
-cargo clippy <PATCHES> --locked --all-targets --all-features -- -D warnings
-cargo <PATCHES> test --locked --all-targets --all-features
-cargo <PATCHES> rustdoc --locked --lib --all-features -- -D warnings -D missing-docs
-cargo <PATCHES> run --locked --example bounded_retrograde
-cargo <PATCHES> package --locked
+cargo fmt --check
+cargo clippy --locked --all-targets --all-features -- -D warnings
+cargo test --locked --all-targets --all-features
+cargo rustdoc --locked --lib --all-features -- -D warnings -D missing-docs
+cargo run --locked --example bounded_retrograde
+cargo package --locked
 ```
-
-`<PATCHES>` means the two `--config` arguments shown above. For `clippy`, place
-them after the subcommand as displayed.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for validation expectations,
 [CHANGELOG.md](CHANGELOG.md) for the candidate contract,

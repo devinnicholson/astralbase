@@ -35,6 +35,7 @@ checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
 [[package]]
 name = "bitmesh"
 version = "0.1.0"
+source = "git+https://github.com/devinnicholson/bitmesh?rev=410550c0964004cd7ba9677539f17ae82c139dd8#410550c0964004cd7ba9677539f17ae82c139dd8"
 dependencies = [
  "shakmaty",
 ]
@@ -222,6 +223,7 @@ dependencies = [
 [[package]]
 name = "thermograph"
 version = "0.1.0"
+source = "git+https://github.com/devinnicholson/thermograph?rev=32d6bfbc966f47a87e7249d4ed8818370288e079#32d6bfbc966f47a87e7249d4ed8818370288e079"
 
 [[package]]
 name = "unicode-ident"
